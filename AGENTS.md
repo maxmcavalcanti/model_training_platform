@@ -34,7 +34,9 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
 - Um arquivo: `uv run pytest tests/test_smoke.py`
 - Um teste: `uv run pytest tests/test_smoke.py::<test_name>`
 - Adicionar dependência: `uv add <pacote>` (dev: `uv add --dev <pacote>`). Sempre commitar `uv.lock`.
-- Migrações e Postgres de teste: ainda não existem (PRs 05 e 06).
+- Postgres de teste local: `docker compose -f infra/docker-compose.dev.yml up -d`
+- Rodar só testes sem banco: `uv run pytest -m "not db"`
+- Migrações: ainda não existem (PR 06).
 
 ## Fluxo de trabalho
 
