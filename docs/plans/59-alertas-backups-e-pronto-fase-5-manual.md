@@ -12,29 +12,29 @@ Criar bot e bucket exige contas externas; instalar units systemd e testar restor
 - [ ] Criar o bot com o @BotFather (`/newbot`), guardar o token.
 - [ ] Mandar uma mensagem ao bot (ou criar um grupo e adicioná-lo) e obter o `chat_id`: `curl -s https://api.telegram.org/bot<token>/getUpdates`.
 - [ ] Na VPS, `infra/.env`: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Reaplicar o último deploy (`gh run rerun <id>` do `deploy.yml`).
-- [ ] Teste de ponta a ponta: na UI do Prefect, disparar `ingest_ons_carga/producao` com `inicio` depois de `fim` (falha de propósito) → chega mensagem no Telegram com o nome do flow e o link.
+- [ ] Teste de ponta a ponta: na UI do Prefect, disparar `ingest_ons_load/production` com `start` depois de `end` (falha de propósito) → chega mensagem no Telegram com o nome do flow e o link.
 
 ## Checklist — backup
 
 - [ ] Criar bucket privado (Backblaze B2 ou S3, decisão P16) e uma chave restrita a ele.
-- [ ] Na VPS, `infra/.env`: `RCLONE_DESTINO` e as variáveis `RCLONE_CONFIG_<REMOTO>_*` do provedor (ver documentação do rclone para B2/S3).
-- [ ] Instalar as units: `sudo cp /opt/plataforma/infra/systemd/plataforma-backup* /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now plataforma-backup.timer`.
-- [ ] Rodar uma vez: `sudo systemctl start plataforma-backup.service && journalctl -u plataforma-backup.service -n 20` → `backup ok <data>`.
-- [ ] Teste de falha: trocar temporariamente `RCLONE_DESTINO` por um inválido, rodar o serviço, ver a mensagem de falha no Telegram, restaurar o valor.
+- [ ] Na VPS, `infra/.env`: `RCLONE_DESTINATION` e as variáveis `RCLONE_CONFIG_<REMOTO>_*` do provedor (ver documentação do rclone para B2/S3).
+- [ ] Instalar as units: `sudo cp /opt/platform/infra/systemd/platform-backup* /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now platform-backup.timer`.
+- [ ] Rodar uma vez: `sudo systemctl start platform-backup.service && journalctl -u platform-backup.service -n 20` → `backup ok <data>`.
+- [ ] Teste de falha: trocar temporariamente `RCLONE_DESTINATION` por um inválido, rodar o serviço, ver a mensagem de falha no Telegram, restaurar o valor.
 
 ## Checklist — restore real (e depois todo mês)
 
 - [ ] Restaurar num ambiente separado, não em produção: no notebook, com o compose de dev (`docker compose -f infra/docker-compose.dev.yml up -d`), rodar a imagem `backup` com `restore.sh <data>` apontando para o Postgres de dev e um diretório local de artefatos.
-- [ ] Conferir: `select count(*) from raw.ons_carga_diaria` igual ao de produção no dia do backup; uma execução do MLflow com artefato abre.
+- [ ] Conferir: `select count(*) from raw.ons_daily_load` igual ao de produção no dia do backup; uma execução do MLflow com artefato abre.
 - [ ] Agendar lembrete mensal (calendário) para repetir.
 
 ## Verificação de pronto da Fase 5
 
 | Onde | Comando / ação | Esperado |
 | --- | --- | --- |
-| VPS | `systemctl list-timers plataforma-backup.timer` | Próxima execução às 03:00 |
-| Destino | `rclone lsd "$RCLONE_DESTINO"` (na VPS, com o `.env` carregado) | Pastas diárias, nenhuma com mais de 14 dias |
-| Grafana | Painel "Erro dos modelos", modelo `media_movel` | Métrica diária e médias móveis, com o último ponto de ontem ou anteontem |
+| VPS | `systemctl list-timers platform-backup.timer` | Próxima execução às 03:00 |
+| Destino | `rclone lsd "$RCLONE_DESTINATION"` (na VPS, com o `.env` carregado) | Pastas diárias, nenhuma com mais de 14 dias |
+| Grafana | Painel "Erro dos modelos", modelo `moving_average` | Métrica diária e médias móveis, com o último ponto de ontem ou anteontem |
 | Dia seguinte | Mesmo painel, sem nenhuma ação | Um ponto novo (atualizou sozinho) |
 | Telegram | Simular disco cheio não é prático; parar o MLflow por 20 min (`docker compose stop mlflow`) | Alerta `mlflow` e depois `RESOLVIDO` ao subir de novo (`docker compose start mlflow`) |
 

@@ -27,8 +27,8 @@ Fase 1 — "Postgres, migrações com Alembic, usuários e permissões" (parte "
 | `migrations/env.py` | Lê a URL de `DATABASE_URL_ADMIN` (ou `DATABASE_URL`); modo online apenas |
 | `migrations/script.py.mako` | Template padrão do Alembic |
 | `migrations/versions/0001_schemas.py` | Cria os cinco schemas; `downgrade` os remove |
-| `tests/conftest.py` | Novas fixtures `novo_banco` (fábrica) e `banco_migrado` (test-writer) |
-| `tests/test_migracoes.py` | Testes (test-writer) |
+| `tests/conftest.py` | Novas fixtures `fresh_database` (fábrica) e `migrated_database` (test-writer) |
+| `tests/test_migrations.py` | Testes (test-writer) |
 | `.github/workflows/ci.yml` | Passo `uv run alembic upgrade head` num banco vazio |
 | `AGENTS.md` | Comandos de migração |
 
@@ -40,10 +40,10 @@ Regra aplicável (`.claude/rules/migrations-e-dados.md`):
 
 0. (implementer) `uv add alembic`. Commit `build: add alembic`.
 1. (test-writer) Em `tests/conftest.py`, acrescente:
-   - `novo_banco`: fixture fábrica (escopo função) que cria um banco `ml_test_<hex>` vazio, devolve a URL e o apaga no teardown.
-   - `banco_migrado`: escopo sessão; cria um banco, define `DATABASE_URL_ADMIN` para ele (via `monkeypatch` de sessão ou `os.environ` com restauração) e roda `alembic.command.upgrade(alembic.config.Config("alembic.ini"), "head")`. Devolve a URL.
-   - Escreva `tests/test_migracoes.py` com os casos da seção 8 (todos `@pytest.mark.db`). Confirme falha porque `alembic.ini` não existe. Commit `test: add migration tests`.
-2. (implementer) `uv run alembic init migrations` e ajuste: mover `alembic.ini` para a raiz (o `init` já o cria lá), apagar o modo offline do `env.py` se não for usado, e fazer `env.py` montar a engine com `ingestion.db.criar_engine(os.environ.get("DATABASE_URL_ADMIN") or os.environ.get("DATABASE_URL"))`. Se nenhuma existir, `criar_engine` já levanta `ConfiguracaoAusente`.
+   - `fresh_database`: fixture fábrica (escopo função) que cria um banco `ml_test_<hex>` vazio, devolve a URL e o apaga no teardown.
+   - `migrated_database`: escopo sessão; cria um banco, define `DATABASE_URL_ADMIN` para ele (via `monkeypatch` de sessão ou `os.environ` com restauração) e roda `alembic.command.upgrade(alembic.config.Config("alembic.ini"), "head")`. Devolve a URL.
+   - Escreva `tests/test_migrations.py` com os casos da seção 8 (todos `@pytest.mark.db`). Confirme falha porque `alembic.ini` não existe. Commit `test: add migration tests`.
+2. (implementer) `uv run alembic init migrations` e ajuste: mover `alembic.ini` para a raiz (o `init` já o cria lá), apagar o modo offline do `env.py` se não for usado, e fazer `env.py` montar a engine com `ingestion.db.build_engine(os.environ.get("DATABASE_URL_ADMIN") or os.environ.get("DATABASE_URL"))`. Se nenhuma existir, `build_engine` já levanta `MissingConfiguration`.
 3. Convenção de revisões: ids numéricos sequenciais com 4 dígitos, passados por `--rev-id`. Crie `uv run alembic revision -m "schemas" --rev-id 0001`.
 4. Em `0001_schemas.py`: `upgrade` executa `CREATE SCHEMA IF NOT EXISTS` para os cinco schemas; `downgrade` executa `DROP SCHEMA IF EXISTS <s>` (sem `CASCADE`, para falhar alto se algo ficou para trás).
 5. No `ci.yml`: no service `postgres`, `env: POSTGRES_DB: ml_ci`; antes do pytest, passo `uv run alembic upgrade head` com `DATABASE_URL_ADMIN: postgresql+psycopg://postgres:postgres@localhost:5432/ml_ci`.
@@ -57,7 +57,7 @@ Regra aplicável (`.claude/rules/migrations-e-dados.md`):
 
 | Comando | Saída esperada |
 | --- | --- |
-| `uv run pytest tests/test_migracoes.py` | Todos passam |
+| `uv run pytest tests/test_migrations.py` | Todos passam |
 | `DATABASE_URL_ADMIN=postgresql+psycopg://postgres:postgres@localhost:5432/postgres uv run alembic upgrade head` (com o compose de dev rodando) | Termina com `Running upgrade  -> 0001, schemas` |
 | `uv run alembic heads` | `0001 (head)` |
 | `uv run pytest` | Suíte verde |

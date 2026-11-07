@@ -41,11 +41,11 @@ Regras gerais já cobertas pelos testes do PR 03 (devem continuar passando): nen
    - `build: {context: ./mlflow}`, `restart: unless-stopped`, `depends_on: postgres` saudável.
    - `ports: ["127.0.0.1:5000:5000"]` (só loopback; nunca `0.0.0.0`).
    - `mem_limit: 512m` (estimativa de 300–500 MB; ajuste pelo número medido no 28a, se houver).
-   - `command`: `mlflow server --host 0.0.0.0 --port 5000 --workers 1 --backend-store-uri postgresql://mlflow:${MLFLOW_DB_SENHA}@postgres:5432/mlflow --artifacts-destination /mlartifacts --serve-artifacts`. O `--host 0.0.0.0` é dentro do container (rede do compose); o que vai para o host é só o `127.0.0.1:5000` do `ports`. `--workers 1` economiza memória na VPS de 1 GB (confira se a versão fixada aceita a opção; em versões com servidor uvicorn o nome pode mudar). Se a versão fixada exigir lista de hosts permitidos (opção `--allowed-hosts` nas versões recentes), inclua `mlflow`, `localhost`, `127.0.0.1:5000` e `${TS_HOSTNAME}:5000`.
+   - `command`: `mlflow server --host 0.0.0.0 --port 5000 --workers 1 --backend-store-uri postgresql://mlflow:${MLFLOW_DB_PASSWORD}@postgres:5432/mlflow --artifacts-destination /mlartifacts --serve-artifacts`. O `--host 0.0.0.0` é dentro do container (rede do compose); o que vai para o host é só o `127.0.0.1:5000` do `ports`. `--workers 1` economiza memória na VPS de 1 GB (confira se a versão fixada aceita a opção; em versões com servidor uvicorn o nome pode mudar). Se a versão fixada exigir lista de hosts permitidos (opção `--allowed-hosts` nas versões recentes), inclua `mlflow`, `localhost`, `127.0.0.1:5000` e `${TS_HOSTNAME}:5000`.
    - `volumes: [mlflow_artifacts:/mlartifacts]`.
    - `healthcheck` em `http://localhost:5000/health` (use `python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"`; a imagem pode não ter `curl`).
 4. `infra/scripts/tailscale-serve.sh`: acrescente `tailscale serve --bg --https=5000 http://127.0.0.1:5000`.
-5. `ci.yml`: `docker compose -f infra/docker-compose.yml --env-file infra/.env.example build mlflow`; smoke: subir `postgres`, rodar `jobs python -m ingestion criar-bancos`, subir `mlflow` com `--wait` e `docker compose ... exec mlflow python -c "<urllib /health>"`. Derrubar com `down -v`. (Pode ser o mesmo job de smoke do PR 10.)
+5. `ci.yml`: `docker compose -f infra/docker-compose.yml --env-file infra/.env.example build mlflow`; smoke: subir `postgres`, rodar `jobs python -m ingestion create-databases`, subir `mlflow` com `--wait` e `docker compose ... exec mlflow python -c "<urllib /health>"`. Derrubar com `down -v`. (Pode ser o mesmo job de smoke do PR 10.)
 6. Rode os critérios de pronto.
 
 ## 6. Critérios de pronto
@@ -53,7 +53,7 @@ Regras gerais já cobertas pelos testes do PR 03 (devem continuar passando): nen
 | Comando | Saída esperada |
 | --- | --- |
 | `uv run pytest tests/infra/` | Todos passam |
-| `docker compose -f infra/docker-compose.yml --env-file infra/.env.example up -d --wait postgres mlflow` (depois de `criar-bancos`) | `mlflow ... Healthy` |
+| `docker compose -f infra/docker-compose.yml --env-file infra/.env.example up -d --wait postgres mlflow` (depois de `create-databases`) | `mlflow ... Healthy` |
 | `curl -s http://127.0.0.1:5000/health` | `OK` |
 | `docker compose -f infra/docker-compose.yml --env-file infra/.env.example ps --format '{{.Name}} {{.Ports}}'` | `mlflow` com `127.0.0.1:5000->5000/tcp`; nenhuma linha com `0.0.0.0` |
 | `shellcheck infra/scripts/tailscale-serve.sh` | Sem saída |
@@ -66,7 +66,7 @@ Regras gerais já cobertas pelos testes do PR 03 (devem continuar passando): nen
 ## 8. Casos de teste
 
 1. Compose: `mlflow` publica só `127.0.0.1:5000:5000`, tem `restart: unless-stopped` e `mem_limit`.
-2. Compose: o `command` do `mlflow` contém `--serve-artifacts` e usa o usuário `mlflow` no backend, nunca o admin; a senha vem de `${MLFLOW_DB_SENHA}`.
+2. Compose: o `command` do `mlflow` contém `--serve-artifacts` e usa o usuário `mlflow` no backend, nunca o admin; a senha vem de `${MLFLOW_DB_PASSWORD}`.
 3. Compose: artefatos em volume nomeado.
 4. `tailscale-serve.sh` tem a linha `--https=5000 http://127.0.0.1:5000` (caso geral do PR 03, agora com o `mlflow` na lista de UIs).
 5. Exemplo negativo do caso geral: um compose de teste com `mlflow` em `"5000:5000"` (sem IP) reprova.

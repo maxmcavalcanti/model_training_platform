@@ -5,7 +5,7 @@
 
 ## 1. Objetivo
 
-Declarar em código os deployments dos três flows de ingestão, com agenda cron no fuso `America/Sao_Paulo` e o work pool `plataforma`, e um comando para registrá-los no servidor.
+Declarar em código os deployments dos três flows de ingestão, com agenda cron no fuso `America/Sao_Paulo` e o work pool `platform`, e um comando para registrá-los no servidor.
 O registro é idempotente: rodar de novo atualiza, não duplica.
 
 ## 2. Fora do escopo
@@ -21,20 +21,20 @@ Fase 3 — "Ingestões migradas para flows do Prefect".
 
 | Caminho | Motivo |
 | --- | --- |
-| `flows/deployments.py` | `DEPLOYMENTS` (lista declarativa) e `registrar()`; `python -m flows.deployments` registra todos |
+| `flows/deployments.py` | `DEPLOYMENTS` (lista declarativa) e `register()`; `python -m flows.deployments` registra todos |
 | `tests/test_deployments.py` | Testes (test-writer) |
 | `AGENTS.md` | Comando para registrar deployments |
 
-Agenda (`docs/plataforma-ml.md`, "Ingestão", BRT): 06:30 `ingest_clima_previsao`, 06:45 `ingest_clima_observado`, 07:00 `ingest_ons_carga`. Use os horários que estiverem em `infra/cron/crontab` (podem ter sido ajustados pelo item 18); os dois têm de bater até o PR 36.
+Agenda (`docs/plataforma-ml.md`, "Ingestão", BRT): 06:30 `ingest_weather_forecast`, 06:45 `ingest_weather_observed`, 07:00 `ingest_ons_load`. Use os horários que estiverem em `infra/cron/crontab` (podem ter sido ajustados pelo item 18); os dois têm de bater até o PR 36.
 
 ## 5. Passos
 
 1. (test-writer) Testes da seção 8: importam `DEPLOYMENTS` e inspecionam a declaração; o teste de registro usa `prefect_test_harness` e consulta o servidor de teste com `get_client()`. Confirme falha por `ModuleNotFoundError: flows.deployments`. Commit `test: add deployment definition tests`.
 2. (implementer) `flows/deployments.py`:
-   - `POOL = "plataforma"`, `FUSO = "America/Sao_Paulo"`.
-   - `DEPLOYMENTS`: lista de registros (nome do deployment, flow, cron). Nome do deployment = nome do flow + `/producao` (ex.: `ingest_clima_previsao/producao`).
-   - `registrar()`: garante que o work pool `POOL` existe (tipo `process`), e para cada item usa `flow.to_deployment(name="producao", cron=..., timezone=FUSO, work_pool_name=POOL)` e `prefect.deploy(..., build=False, push=False)` ou a API equivalente da versão instalada, sem imagem (o worker roda no container que já tem o código, PR 34).
-   - `if __name__ == "__main__": registrar()`.
+   - `POOL = "platform"`, `TIMEZONE = "America/Sao_Paulo"`.
+   - `DEPLOYMENTS`: lista de registros (nome do deployment, flow, cron). Nome do deployment = nome do flow + `/production` (ex.: `ingest_weather_forecast/production`).
+   - `register()`: garante que o work pool `POOL` existe (tipo `process`), e para cada item usa `flow.to_deployment(name="production", cron=..., timezone=TIMEZONE, work_pool_name=POOL)` e `prefect.deploy(..., build=False, push=False)` ou a API equivalente da versão instalada, sem imagem (o worker roda no container que já tem o código, PR 34).
+   - `if __name__ == "__main__": register()`.
 3. `AGENTS.md`, Comandos: "Registrar deployments do Prefect: `PREFECT_API_URL=<url> uv run python -m flows.deployments`".
 4. Rode os critérios de pronto.
 
@@ -44,7 +44,7 @@ Agenda (`docs/plataforma-ml.md`, "Ingestão", BRT): 06:30 `ingest_clima_previsao
 | --- | --- |
 | `uv run pytest tests/test_deployments.py` | Todos passam |
 | Com o compose de produção local (`postgres`, `prefect-server`) e `PREFECT_API_URL` apontando para ele: `uv run python -m flows.deployments` | Termina sem erro |
-| Em seguida, `uv run prefect deployment ls` | Os três deployments `.../producao` |
+| Em seguida, `uv run prefect deployment ls` | Os três deployments `.../production` |
 | Rodar o registro de novo e listar | Continuam três |
 | `uv run pytest` | Suíte verde |
 | `gh pr checks` | Verde |
@@ -55,15 +55,15 @@ Agenda (`docs/plataforma-ml.md`, "Ingestão", BRT): 06:30 `ingest_clima_previsao
 
 ## 8. Casos de teste
 
-1. `DEPLOYMENTS` tem exatamente os flows `ingest_clima_previsao`, `ingest_clima_observado`, `ingest_ons_carga`.
+1. `DEPLOYMENTS` tem exatamente os flows `ingest_weather_forecast`, `ingest_weather_observed`, `ingest_ons_load`.
 2. Para cada um, o cron é igual ao da linha correspondente em `infra/cron/crontab` (enquanto o arquivo existir).
-3. Todos usam `timezone = "America/Sao_Paulo"` e `work_pool_name = "plataforma"`.
-4. (servidor de teste) Depois de `registrar()`, o servidor tem os três deployments com as agendas certas e o pool `plataforma`.
-5. (servidor de teste) `registrar()` duas vezes → continuam três deployments, sem agenda duplicada.
+3. Todos usam `timezone = "America/Sao_Paulo"` e `work_pool_name = "platform"`.
+4. (servidor de teste) Depois de `register()`, o servidor tem os três deployments com as agendas certas e o pool `platform`.
+5. (servidor de teste) `register()` duas vezes → continuam três deployments, sem agenda duplicada.
 
 ## 9. Riscos e perguntas em aberto
 
-- Durante a transição (itens 35 e PR 36), supercronic e Prefect podem rodar o mesmo job no mesmo dia. É seguro porque os jobs são idempotentes e a previsão usa `ignorar` no conflito.
+- Durante a transição (itens 35 e PR 36), supercronic e Prefect podem rodar o mesmo job no mesmo dia. É seguro porque os jobs são idempotentes e a previsão usa `ignore` no conflito.
 - A API de deploy do Prefect 3 mudou entre minors; siga a documentação da versão fixada, mantendo o comportamento dos testes.
 
 ## 10. Decisões que exigem ADR

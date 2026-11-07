@@ -39,7 +39,7 @@ Pré-requisito da Fase 0 (`docs/plataforma-ml.md`, seção "Roadmap"). O roadmap
 1. Confirme que o `uv` está instalado: `uv --version`. Se não estiver, pare e reporte ao usuário (a toolchain foi aprovada em 2026-11-07, P1 resolvida; falta só a instalação).
 2. Crie `.python-version` com o conteúdo `3.12`.
 3. Crie `pyproject.toml`:
-   - `[project]`: `name = "plataforma"`, `version = "0.1.0"`, `requires-python = ">=3.12,<3.13"`, `dependencies = []`.
+   - `[project]`: `name = "platform"`, `version = "0.1.0"`, `requires-python = ">=3.12,<3.13"`, `dependencies = []`.
    - `[dependency-groups]`: `dev = ["pytest", "ruff", "pyyaml"]` (pyyaml é usado pelos testes de compose do PR 03; incluir agora evita um commit só de dependência lá). Adicione com `uv add --dev pytest ruff pyyaml` para que as versões fiquem no lock.
    - `[build-system]`: `requires = ["hatchling"]`, `build-backend = "hatchling.build"`.
    - `[tool.hatch.build.targets.wheel]`: `packages = ["ingestion", "flows"]`.
@@ -52,7 +52,7 @@ Pré-requisito da Fase 0 (`docs/plataforma-ml.md`, seção "Roadmap"). O roadmap
 7. Crie `.gitignore` com as entradas da tabela.
 8. Crie `.github/workflows/ci.yml`:
    - Gatilhos: `pull_request` e `push` na `main`.
-   - Um job `lint-e-testes` em `ubuntu-latest`: `actions/checkout` (major atual), `astral-sh/setup-uv` (major atual, com `enable-cache: true`), `uv sync --locked`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`.
+   - Um job `lint-and-test` em `ubuntu-latest`: `actions/checkout` (major atual), `astral-sh/setup-uv` (major atual, com `enable-cache: true`), `uv sync --locked`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`.
    - Fixe as actions por major (ex.: `@v4`) depois de conferir no GitHub Marketplace qual é a atual. Não invente versão.
 9. Substitua a seção "Comandos" do `AGENTS.md` por (texto exato, em lista):
    - Instalar/atualizar ambiente: `uv sync`
@@ -60,7 +60,7 @@ Pré-requisito da Fase 0 (`docs/plataforma-ml.md`, seção "Roadmap"). O roadmap
    - Formatação (checar): `uv run ruff format --check .` / aplicar: `uv run ruff format .`
    - Suíte de testes: `uv run pytest`
    - Um arquivo: `uv run pytest tests/test_smoke.py`
-   - Um teste: `uv run pytest tests/test_smoke.py::<nome_do_teste>`
+   - Um teste: `uv run pytest tests/test_smoke.py::<test_name>`
    - Adicionar dependência: `uv add <pacote>` (dev: `uv add --dev <pacote>`). Sempre commitar `uv.lock`.
    - Uma linha: "Migrações e Postgres de teste: ainda não existem (PRs 05 e 06)."
 10. Rode os critérios de pronto e commite em conventional commits (`chore: bootstrap python env and ci`).
@@ -75,7 +75,7 @@ Pré-requisito da Fase 0 (`docs/plataforma-ml.md`, seção "Roadmap"). O roadmap
 | `uv run pytest` | `1 passed` |
 | `uv run python -c "import ingestion, flows; print('ok')"` | `ok` |
 | `git ls-files uv.lock .python-version` | As duas linhas |
-| No PR aberto, `gh pr checks` | Job `lint-e-testes` com `pass` |
+| No PR aberto, `gh pr checks` | Job `lint-and-test` com `pass` |
 | `grep -n "uv run pytest" AGENTS.md` | Ao menos uma linha na seção Comandos |
 
 ## 7. Testes necessários

@@ -26,8 +26,8 @@ Fase 5 — "Alertas no Telegram, backups com restore testado".
 | `infra/backup/backup.sh` | Dump, tar, upload, retenção |
 | `infra/backup/restore.sh` | Download de uma data e restore |
 | `infra/docker-compose.yml` | Serviço `backup` no profile `jobs` (execução única), com o volume `mlflow_artifacts` montado somente leitura |
-| `infra/systemd/plataforma-backup.service`, `.timer`, `plataforma-backup-falhou.service` | Agenda diária no host e aviso de falha no Telegram |
-| `infra/.env.example` | `RCLONE_DESTINO`, `RCLONE_CONFIG_*` (fictícios), `BACKUP_RETENCAO_DIAS=14` |
+| `infra/systemd/platform-backup.service`, `.timer`, `platform-backup-failed.service` | Agenda diária no host e aviso de falha no Telegram |
+| `infra/.env.example` | `RCLONE_DESTINATION`, `RCLONE_CONFIG_*` (fictícios), `BACKUP_RETENTION_DAYS=14` |
 | `tests/infra/test_backup_restore.py` | Teste de ida e volta (test-writer) |
 | `.github/workflows/ci.yml` | `shellcheck infra/backup/*.sh` (o passo de `shellcheck` criado no PR 03 pode ser ampliado) |
 
@@ -36,15 +36,15 @@ Do doc: "Backups: `pg_dump` diário dos três bancos + volume de artefatos do ML
 ## 5. Passos
 
 0. (implementer) Registre o marcador `docker: precisa de Docker para construir e rodar imagens` em `pyproject.toml`. Commit `build: add docker test marker`.
-1. (test-writer) `tests/infra/test_backup_restore.py` (`@pytest.mark.db`, `@pytest.mark.docker`): constrói a imagem `infra/backup/Dockerfile`; cria no servidor de teste três bancos temporários com uma tabela e linhas conhecidas; cria um diretório temporário fazendo papel do volume de artefatos com um arquivo conhecido; roda `backup.sh` no container com `--network host`, `RCLONE_DESTINO=/destino` (diretório local montado: o rclone aceita caminho local) e as URLs dos bancos; apaga as tabelas e o arquivo; roda `restore.sh <data>`; confere as linhas e o arquivo. Casos na seção 8. Confirme falha porque a imagem não existe. Commit `test: add backup and restore round trip test`.
+1. (test-writer) `tests/infra/test_backup_restore.py` (`@pytest.mark.db`, `@pytest.mark.docker`): constrói a imagem `infra/backup/Dockerfile`; cria no servidor de teste três bancos temporários com uma tabela e linhas conhecidas; cria um diretório temporário fazendo papel do volume de artefatos com um arquivo conhecido; roda `backup.sh` no container com `--network host`, `RCLONE_DESTINATION=/destination` (diretório local montado: o rclone aceita caminho local) e as URLs dos bancos; apaga as tabelas e o arquivo; roda `restore.sh <data>`; confere as linhas e o arquivo. Casos na seção 8. Confirme falha porque a imagem não existe. Commit `test: add backup and restore round trip test`.
 2. (implementer) `backup.sh` (`set -euo pipefail`):
-   - Para cada banco em `BACKUP_BANCOS` (padrão `ml mlflow prefect`): `pg_dump -Fc` usando `PGHOST`, `PGUSER`, `PGPASSWORD` do ambiente.
-   - `tar czf artefatos.tgz -C /artefatos .`.
-   - `rclone copy <dir> "$RCLONE_DESTINO/<AAAA-MM-DD>/"`; depois `rclone delete --min-age "${BACKUP_RETENCAO_DIAS}d" "$RCLONE_DESTINO"` e `rclone rmdirs --leave-root "$RCLONE_DESTINO"`.
+   - Para cada banco em `BACKUP_DATABASES` (padrão `ml mlflow prefect`): `pg_dump -Fc` usando `PGHOST`, `PGUSER`, `PGPASSWORD` do ambiente.
+   - `tar czf artifacts.tgz -C /artifacts .`.
+   - `rclone copy <dir> "$RCLONE_DESTINATION/<AAAA-MM-DD>/"`; depois `rclone delete --min-age "${BACKUP_RETENTION_DAYS}d" "$RCLONE_DESTINATION"` e `rclone rmdirs --leave-root "$RCLONE_DESTINATION"`.
    - Imprime `backup ok <data> <tamanhos>`.
-3. `restore.sh <AAAA-MM-DD>`: valida a data; `rclone copy "$RCLONE_DESTINO/<data>/" <tmp>`; para cada banco, `pg_restore --clean --if-exists --no-owner -d <banco>`; extrai os artefatos em `/artefatos` (que no restore é montado com escrita). Imprime `restore ok <data>`.
-4. Compose: serviço `backup` com `build: ./backup`, `profiles: ["jobs"]`, `restart: "no"`, `mem_limit: 256m`, `environment` com o usuário admin e `RCLONE_*`, volume `mlflow_artifacts:/artefatos:ro`.
-5. Units systemd: `plataforma-backup.service` (`Type=oneshot`, `ExecStart=/usr/bin/docker compose -f /opt/plataforma/infra/docker-compose.yml run --rm backup`, `OnFailure=plataforma-backup-falhou.service`); `.timer` às 03:00 (`OnCalendar=*-*-* 03:00:00`, `Persistent=true`); `plataforma-backup-falhou.service` chama `curl` para a API do Telegram com `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` lidos de `EnvironmentFile=/opt/plataforma/infra/.env`.
+3. `restore.sh <AAAA-MM-DD>`: valida a data; `rclone copy "$RCLONE_DESTINATION/<data>/" <tmp>`; para cada banco, `pg_restore --clean --if-exists --no-owner -d <banco>`; extrai os artefatos em `/artifacts` (que no restore é montado com escrita). Imprime `restore ok <data>`.
+4. Compose: serviço `backup` com `build: ./backup`, `profiles: ["jobs"]`, `restart: "no"`, `mem_limit: 256m`, `environment` com o usuário admin e `RCLONE_*`, volume `mlflow_artifacts:/artifacts:ro`.
+5. Units systemd: `platform-backup.service` (`Type=oneshot`, `ExecStart=/usr/bin/docker compose -f /opt/platform/infra/docker-compose.yml run --rm backup`, `OnFailure=platform-backup-failed.service`); `.timer` às 03:00 (`OnCalendar=*-*-* 03:00:00`, `Persistent=true`); `platform-backup-failed.service` chama `curl` para a API do Telegram com `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` lidos de `EnvironmentFile=/opt/platform/infra/.env`.
 6. Rode os critérios de pronto.
 
 ## 6. Critérios de pronto
@@ -63,9 +63,9 @@ Do doc: "Backups: `pg_dump` diário dos três bancos + volume de artefatos do ML
 
 ## 8. Casos de teste
 
-1. Backup de três bancos com linhas conhecidas e um arquivo de artefato → o destino tem `<data>/ml.dump`, `mlflow.dump`, `prefect.dump`, `artefatos.tgz`.
+1. Backup de três bancos com linhas conhecidas e um arquivo de artefato → o destino tem `<data>/ml.dump`, `mlflow.dump`, `prefect.dump`, `artifacts.tgz`.
 2. Depois de apagar as tabelas e o arquivo, `restore.sh <data>` → linhas e arquivo de volta, idênticos.
-3. Destino com uma pasta de 20 dias atrás (arquivos com data de modificação antiga) e `BACKUP_RETENCAO_DIAS=14` → a pasta antiga some; a de hoje fica.
+3. Destino com uma pasta de 20 dias atrás (arquivos com data de modificação antiga) e `BACKUP_RETENTION_DAYS=14` → a pasta antiga some; a de hoje fica.
 4. Banco inacessível → `backup.sh` sai com código ≠ 0 e nada é enviado ao destino para essa data.
 5. `restore.sh 2026-13-01` → código ≠ 0, nenhum banco tocado.
 6. Compose: `backup` em profile, sem `ports`, artefatos montados `:ro`.

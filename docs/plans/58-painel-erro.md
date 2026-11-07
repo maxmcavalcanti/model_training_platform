@@ -1,11 +1,11 @@
 # 58 — Painel "Erro real × previsto" no Grafana
 
-> Executa: agente. Depende de: 49, 51. Branch sugerida: `feat/painel-erro`.
+> Executa: agente. Depende de: 49, 51. Branch sugerida: `feat/dashboard-model-error`.
 > TDD: test-writer (vermelho) → implementação (verde) → refatorar.
 
 ## 1. Objetivo
 
-Provisionar o painel "Erro dos modelos": métricas diárias de `monitoring.metricas` por modelo, com médias móveis de 7 e 30 dias, e a versão do modelo ao longo do tempo.
+Provisionar o painel "Erro dos modelos": métricas diárias de `monitoring.model_metrics` por modelo, com médias móveis de 7 e 30 dias, e a versão do modelo ao longo do tempo.
 É o critério de pronto da Fase 5 ("o painel mostra erro real × previsto atualizando sozinho").
 
 ## 2. Fora do escopo
@@ -21,18 +21,18 @@ Fase 5 — "Pronto quando: o painel mostra erro real × previsto atualizando soz
 
 | Caminho | Motivo |
 | --- | --- |
-| `infra/grafana/dashboards/erro-modelos.json` | O painel (uid `erro-modelos`) |
-| `tests/infra/test_paineis_sql.py` | Casos deste painel (test-writer) |
+| `infra/grafana/dashboards/model-error.json` | O painel (uid `model-error`) |
+| `tests/infra/test_dashboards_sql.py` | Casos deste painel (test-writer) |
 
-Tabela: `monitoring.metricas(modelo, versao_modelo, data, metrica, valor)`, chave (`modelo`, `data`, `metrica`). O teste genérico do PR 48 já executa todo SQL de painel como `leitura`.
+Tabela: `monitoring.model_metrics(model_name, model_version, date, metric, value)`, chave (`model_name`, `date`, `metric`). O teste genérico do PR 48 já executa todo SQL de painel como `reader`.
 
 ## 5. Passos
 
-1. (test-writer) Casos da seção 8; variáveis `$modelo = 'teste'` e `$metrica = 'mape'`. Confirme falha porque o JSON não existe. Commit `test: add model error panel tests`.
-2. (implementer) `erro-modelos.json`:
-   - Variáveis `modelo` (`select distinct modelo from monitoring.metricas`) e `metrica` (`select distinct metrica from monitoring.metricas where modelo = '$modelo'`).
-   - "Métrica diária e médias móveis": `valor` por `data`, mais `avg(valor) over (order by data rows between 6 preceding and current row)` e o mesmo com 29.
-   - "Versão em produção por dia": `versao_modelo` por `data` (tabela ou state timeline).
+1. (test-writer) Casos da seção 8; variáveis `$model_name = 'test'` e `$metric = 'mape'`. Confirme falha porque o JSON não existe. Commit `test: add model error panel tests`.
+2. (implementer) `model-error.json`:
+   - Variáveis `model_name` (`select distinct model_name from monitoring.model_metrics`) e `metric` (`select distinct metric from monitoring.model_metrics where model_name = '$model_name'`).
+   - "Métrica diária e médias móveis": `value` por `date`, mais `avg(value) over (order by date rows between 6 preceding and current row)` e o mesmo com 29.
+   - "Versão em produção por dia": `model_version` por `date` (tabela ou state timeline).
    - "Previsto × real" do PR 49 referenciado por link (não duplicar).
 3. Rode os critérios de pronto.
 
@@ -40,8 +40,8 @@ Tabela: `monitoring.metricas(modelo, versao_modelo, data, metrica, valor)`, chav
 
 | Comando | Saída esperada |
 | --- | --- |
-| `uv run pytest tests/infra/test_paineis_sql.py` | Todos passam |
-| `python -m json.tool infra/grafana/dashboards/erro-modelos.json > /dev/null` | Código 0 |
+| `uv run pytest tests/infra/test_dashboards_sql.py` | Todos passam |
+| `python -m json.tool infra/grafana/dashboards/model-error.json > /dev/null` | Código 0 |
 | `gh pr checks` | Verde |
 
 ## 7. Testes necessários
@@ -50,9 +50,9 @@ Tabela: `monitoring.metricas(modelo, versao_modelo, data, metrica, valor)`, chav
 
 ## 8. Casos de teste
 
-1. 10 dias de `mape` = 1, 2, …, 10 para `teste` → no 10º dia, a média de 7 dias é 7.0 (média de 4..10) e a de 30 dias é 5.5.
-2. Métrica de outro modelo não aparece com `$modelo = 'teste'`.
-3. Troca de `versao_modelo` no 6º dia → o painel de versão mostra as duas versões nos dias certos.
+1. 10 dias de `mape` = 1, 2, …, 10 para `test` → no 10º dia, a média de 7 dias é 7.0 (média de 4..10) e a de 30 dias é 5.5.
+2. Métrica de outro modelo não aparece com `$model_name = 'test'`.
+3. Troca de `model_version` no 6º dia → o painel de versão mostra as duas versões nos dias certos.
 4. Sem linhas → consultas executam sem erro e devolvem vazio.
 
 ## 9. Riscos e perguntas em aberto
