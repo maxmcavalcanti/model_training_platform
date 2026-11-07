@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
     mem_limit: 16m
     ports:
-      - "${HEALTH_BIND_IP}:8080:8080"
+      - "${HEALTH_BIND_IP:-127.0.0.1}:8080:8080"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
       interval: 10s
