@@ -45,7 +45,7 @@ Modelo de dados (`docs/plataforma-ml.md`):
    - `subsystem text not null check (subsystem in ('SE','S','NE','N'))` (códigos usados pelo ONS; SE inclui CO)
    - Depois, `op.bulk_insert` com:
 
-   | location_id | nome | lat | lon | subsistema |
+   | location_id | name | lat | lon | subsystem |
    | --- | --- | --- | --- | --- |
    | `sao_paulo` | São Paulo | -23.55 | -46.63 | SE |
    | `porto_alegre` | Porto Alegre | -30.03 | -51.23 | S |
