@@ -16,6 +16,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ml_ci
         ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready --health-interval 5s
@@ -29,6 +30,9 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      - run: uv run alembic upgrade head
+        env:
+          DATABASE_URL_ADMIN: postgresql+psycopg://postgres:postgres@localhost:5432/ml_ci
       - run: uv run pytest
       - run: docker compose -f infra/docker-compose.yml --env-file infra/.env.example config -q
       - run: shellcheck infra/scripts/*.sh
