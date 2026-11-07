@@ -20,6 +20,7 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
 - Toda linha em `raw` leva `ingerido_em`.
 - Todo job termina com checagem de qualidade (pandera). Checagem falha = execução falha.
 - Nenhum segredo no git. Segredos entram por variável de ambiente.
+- O deny de `Read` não impede leitura via Bash (`cat .env`); portanto agentes nunca devem ler arquivos `.env`, com nenhuma ferramenta.
 - Merge na `main` é a única forma de mudar produção.
 
 ## Comandos

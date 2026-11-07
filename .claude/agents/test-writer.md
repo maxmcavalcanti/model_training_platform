@@ -1,6 +1,7 @@
 ---
 name: test-writer
 description: Escreve os testes de uma tarefa a partir do plano em docs/plans/, antes da implementação. Use depois que o plano foi aprovado e antes do task-implementer, quando o plano marcar testes como necessários.
+tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
 ---
 
