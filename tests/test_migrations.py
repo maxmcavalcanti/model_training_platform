@@ -61,7 +61,8 @@ def test_upgrade_head_twice_is_a_no_op(fresh_database, monkeypatch):
     command.upgrade(config, "head")
     command.upgrade(config, "head")
 
-    assert _current_revision(fresh_database) == "0001"
+    head = ScriptDirectory.from_config(config).get_current_head()
+    assert _current_revision(fresh_database) == head
     assert _existing_schemas(fresh_database) == EXPECTED_SCHEMAS
 
 
