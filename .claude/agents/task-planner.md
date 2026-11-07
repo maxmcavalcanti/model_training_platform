@@ -22,7 +22,7 @@ Grave o plano em `docs/plans/<AAAA-MM-DD>-<slug>.md` com estas seções, nesta o
 4. **Arquivos a criar ou alterar:** caminho e motivo de cada um.
 5. **Passos:** numerados, pequenos, na ordem de execução.
 6. **Critérios de pronto:** cada um verificável por um comando com a saída esperada.
-7. **Testes necessários:** `sim` ou `não`, com justificativa de uma linha. Use `não` para ajustes triviais de config ou compose.
+7. **Testes necessários:** `sim` ou `não`, com justificativa de uma linha. Use `não` só para config, compose, documentação ou renomeações sem mudança de comportamento; qualquer mudança de lógica exige `sim`.
 8. **Casos de teste:** comportamentos a verificar, em termos de entrada e resultado esperado, nunca de implementação. Se `Testes necessários: não`, escreva "n/a".
 9. **Riscos e perguntas em aberto.**
 10. **Decisões que exigem ADR.**

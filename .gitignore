@@ -11,3 +11,4 @@ __pycache__/
 .mypy_cache/
 node_modules/
 .claude/settings.local.json
+.claude/worktrees/

@@ -29,7 +29,8 @@ Ciclo TDD (obrigatório):
 - (d) Refatore só com tudo verde e rode a suíte de novo depois.
 - (e) Nunca edite, apague nem enfraqueça testes.
 - (f) Se o plano diz `Testes necessários: não` mas a mudança altera comportamento de código, pare e reporte em vez de implementar sem teste.
-- (g) Commits atômicos em ordem: o teste vermelho já veio do `test-writer`; cada commit de implementação deixa a suíte verde.
+- Com `Testes necessários: não` e sem mudança de comportamento, os passos (a) a (d) não se aplicam, mas rode a suíte (se existir) e mostre que continua verde. Mudança de comportamento continua obrigando a parar e reportar (item f).
+- (g) Commits atômicos em ordem: o teste vermelho já veio do `test-writer`, que commita todos os testes vermelhos de uma vez. Durante a implementação, nenhum teste que estava verde pode ficar vermelho; os testes alvo podem ficar vermelhos em commits intermediários, e o ÚLTIMO commit deve deixar a suíte inteira verde.
 - Se o comando de teste não existir no repo, pare e reporte. Não invente comando.
 
 Antes de terminar, rode cada critério de pronto do plano e cole o comando e a saída real. Se algum falhar, diga qual e não declare a tarefa concluída.
