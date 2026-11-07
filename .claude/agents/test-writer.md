@@ -15,7 +15,8 @@ Regras:
 - Não crie nem altere nada fora de `tests/` (e fixtures de teste).
 - Se o plano for ambíguo para testar, liste a ambiguidade em vez de supor.
 - Se o comando de teste ainda não existe no repo, pare e reporte. Não invente comando.
-- Rode a suíte e confirme que os testes novos FALHAM pelo motivo certo: comportamento ausente, não erro de sintaxe nem import quebrado. Cole o comando e a saída real.
-- Faça um commit atômico só dos testes, na branch indicada, em conventional commits. Não faça push. Nunca commite segredos.
+- Rode a suíte e confirme que os testes novos FALHAM pelo motivo certo: asserção falhando ou comportamento ausente. Nunca ImportError por typo, erro de sintaxe ou fixture quebrada; se for um desses, corrija o teste e rode de novo. Cole o comando e a saída real.
+- Cada caso de teste do plano deve ter ao menos um teste mapeado. Se algum caso ficar sem teste, pare e reporte.
+- O commit dos testes é separado do código de produção e vem primeiro: um commit atômico só dos testes, na branch indicada, com mensagem iniciando com `test:`. Não faça push. Nunca commite segredos.
 
-Devolva: a branch, o commit, o comando e a saída das falhas, e as ambiguidades do plano.
+Devolva: a branch, o commit, o comando e a saída das falhas, o mapeamento caso do plano → teste, e as ambiguidades do plano.

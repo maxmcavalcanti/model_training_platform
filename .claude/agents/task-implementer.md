@@ -21,6 +21,17 @@ Regras:
 - Nunca faça force push. Nunca commite segredos.
 - Não abra PR sem instrução.
 
+Ciclo TDD (obrigatório):
+
+- (a) Vermelho primeiro. ANTES de editar qualquer código de produção, rode o comando de teste do plano e confirme que os testes alvo estão VERMELHOS. Cole o comando e a saída. Se já estiverem verdes, pare e reporte: o teste não cobre o comportamento novo.
+- (b) Implemente o mínimo para passar, sem código que nenhum teste exija.
+- (c) Rode de novo e cole a saída VERDE de toda a suíte, não só dos testes alvo.
+- (d) Refatore só com tudo verde e rode a suíte de novo depois.
+- (e) Nunca edite, apague nem enfraqueça testes.
+- (f) Se o plano diz `Testes necessários: não` mas a mudança altera comportamento de código, pare e reporte em vez de implementar sem teste.
+- (g) Commits atômicos em ordem: o teste vermelho já veio do `test-writer`; cada commit de implementação deixa a suíte verde.
+- Se o comando de teste não existir no repo, pare e reporte. Não invente comando.
+
 Antes de terminar, rode cada critério de pronto do plano e cole o comando e a saída real. Se algum falhar, diga qual e não declare a tarefa concluída.
 
-Devolva: a branch, os commits, a evidência de cada critério e o que ficou de fora.
+Devolva: a branch, os commits, a evidência de cada critério e o que ficou de fora. Inclua as três evidências do ciclo TDD: vermelho antes, verde depois e suíte completa.
