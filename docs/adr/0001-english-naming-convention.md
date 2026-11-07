@@ -253,7 +253,7 @@ As demais branches dos planos já estão em inglês (`chore/bootstrap-dev-env`, 
 ## Consequências
 
 - Mudam os nomes de `raw` e `ref` e a assinatura do contrato (`build_features`, saída de `predict`, `evaluate`), e este ADR cobre essas mudanças. Como ainda não há tabela nem código, não há migração Alembic a fazer. A ciência de dados precisa ser avisada (`AGENTS.md`, "Fronteira"), em especial sobre os nomes de modelo (`load_d1`, `rain_d1`) e o pacote `models`.
-- `.claude/` e algumas linhas do `AGENTS.md` ainda citam nomes antigos até uma tarefa própria de alinhamento.
+- `.claude/` (regras e agentes) ainda cita nomes antigos (`ingerido_em`, `cientista`, `leitura`, `raw.clima_previsao`, `emitida_em`) até uma tarefa própria de alinhamento; as linhas do `AGENTS.md` que citavam `plataforma`, `modelos` e `ingerido_em` foram atualizadas neste mesmo PR.
 - Os nomes de arquivo de `docs/` continuam em português.
 - A semântica das perguntas P8, P9, P12, P14 e P18 do índice (`docs/plans/00-indice.md`) não muda: só os nomes.
 - Os ADRs previstos no índice devem usar os nomes novos quando forem escritos.
