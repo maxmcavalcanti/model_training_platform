@@ -18,3 +18,5 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest
+      - run: docker compose -f infra/docker-compose.yml --env-file infra/.env.example config -q
+      - run: shellcheck infra/scripts/*.sh
