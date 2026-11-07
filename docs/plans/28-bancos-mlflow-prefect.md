@@ -15,7 +15,7 @@ Criar de forma idempotente os bancos `mlflow` e `prefect`, cada um com dono pró
 
 ## 3. Fase do roadmap
 
-Fase 3 — "MLflow e Prefect no compose" (pré-requisito). O doc diz "atrás do Caddy"; pelo ADR de rede do PR 03 (rede só Tailscale, desvio do doc), o acesso é pela tailnet.
+Fase 3 — "MLflow e Prefect no compose" (pré-requisito). Pelo ADR 0003 (rede só Tailscale), o acesso é pela tailnet.
 
 ## 4. Arquivos a criar ou alterar
 

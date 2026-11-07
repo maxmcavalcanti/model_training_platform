@@ -15,7 +15,7 @@ Subir o Prefect 3 server (API + UI) com backend no banco `prefect`, publicado s�
 
 ## 3. Fase do roadmap
 
-Fase 3 — "MLflow e Prefect no compose". O doc diz "atrás do Caddy"; pelo ADR de rede (PR 03, rede só Tailscale, desvio do doc), o acesso é pela tailnet.
+Fase 3 — "MLflow e Prefect no compose, só na tailnet (`tailscale serve`)". Pelo ADR 0003, o acesso é pela tailnet.
 
 ## 4. Arquivos a criar ou alterar
 
@@ -73,4 +73,4 @@ Os testes gerais do PR 03 (porta só em loopback ou IP do Tailscale, `mem_limit`
 
 ## 10. Decisões que exigem ADR
 
-Nenhuma (coberto pelo ADR "Rede só Tailscale" do PR 03).
+Nenhuma (coberto pelo ADR 0003, `docs/adr/0003-tailscale-only-network.md`).

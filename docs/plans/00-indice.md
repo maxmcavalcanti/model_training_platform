@@ -2,19 +2,19 @@
 
 Nov 7, 2026. Fonte: `docs/plataforma-ml.md` (roadmap, modelo de dados, jobs, contrato, CI/CD) e `docs/guia-ciencia-de-dados.md` (lado do contrato).
 
-Revisão v2 (2026-11-07): aplica as decisões P1 a P5 do usuário (toolchain, repos públicos, VPS de 1 GB, rede só Tailscale, coleta da previsão antes do ONS). Ver "Decisões resolvidas".
+Revisão v2 (2026-11-07): aplica as decisões P1 a P5 e a P15 do usuário (toolchain, repos públicos, VPS de 1 GB, rede só Tailscale, coleta da previsão antes do ONS). Ver "Decisões resolvidas".
 
 ## Como usar
 
 - Cada linha **agente** tem uma spec `NN-<slug>.md` com as 10 seções do `task-planner`. Cada linha **usuário** tem um `NN-<slug>-manual.md` com checklist e verificação de pronto.
 - Fluxo de cada PR de agente (`AGENTS.md`, "Fluxo de trabalho"): usuário aprova a spec → `test-writer` escreve os testes e mostra que falham pelo motivo certo → `task-implementer` implementa até ficarem verdes e refatora com a suíte verde → CI → `code-reviewer` → `pr-reviewer`.
 - **Passo 0**: quando os testes importam uma dependência nova (ex.: SQLAlchemy no `conftest.py`), o primeiro commit da branch é do implementador, só com `uv add`, antes do test-writer. Assim o teste falha por comportamento ausente e não por import quebrado. As specs que precisam disso dizem "passo 0".
-- Os comandos (`uv sync`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`, `uv run alembic ...`) são criados pelos PRs 01, 05 e 06 e ficam na seção "Comandos" do `AGENTS.md`. Nenhuma spec usa comando que não exista no ponto em que ela roda.
+- Comandos que já existem (PR 01, ver `.github/workflows/ci.yml`): `uv sync` (no CI, `uv sync --locked`), `uv run ruff check .`, `uv run ruff format --check .` e `uv run pytest`. O Postgres de teste vem do PR 05 e `uv run alembic ...` do PR 06. Cada PR registra os seus na seção "Comandos" do `AGENTS.md`. Nenhuma spec usa comando que não exista no ponto em que ela roda.
 - Uma spec por vez. Antes de começar uma spec, confira se as dependências da coluna "Depende de" já estão na `main` e se os ADRs que ela pede estão aprovados.
 
 ## Restrições que valem para todas as specs
 
-- **Rede só Tailscale** (P4, 2026-11-07). Nenhuma porta pública: sem domínio, sem proxy com autenticação, sem certificado público. As UIs (MLflow, Prefect, Grafana e a rota de saúde) são publicadas só em `127.0.0.1` e expostas na tailnet por `tailscale serve`, num hostname `*.ts.net` com uma porta por UI (recomendado; a alternativa, acesso direto pelo IP/nome do tailnet, é a decisão fina do ADR de rede). O Postgres fica no IP do Tailscale ou em loopback + `tailscale serve --tcp` (P15). Nenhuma porta de serviço é publicada em `0.0.0.0`; os testes do PR 03 travam isso. A ACL do Tailscale é o controle de acesso.
+- **Rede só Tailscale** (P4, 2026-11-07). Nenhuma porta pública: sem domínio, sem proxy com autenticação, sem certificado público. As UIs (MLflow, Prefect, Grafana e a rota de saúde) são publicadas só em `127.0.0.1` e expostas na tailnet por `tailscale serve`, num hostname `*.ts.net` com uma porta por UI (ADR 0003, `docs/adr/0003-tailscale-only-network.md`). O Postgres fica em `127.0.0.1:5432`, exposto na tailnet por `tailscale serve --tcp=5432` (P15). Nenhuma porta de serviço é publicada em `0.0.0.0`; os testes do PR 03 travam isso. A ACL do Tailscale é o controle de acesso.
 - **VPS de 1 GB** (P3, 2026-11-07): 1 vCPU, 1 GB de RAM, 25 GB de SSD, 1 TB de transferência, provedor "Regular Cloud Compute", com 2 GB de swap (item 02) e `mem_limit` em todo serviço do compose (teste do PR 03). **As Fases 0 a 2 devem caber em 1 GB. Da Fase 3 em diante a memória é medida (checkpoint 28a antes do PR 29, e de novo nos itens 31, 35, 50 e 59) e pode exigir upgrade**, que só acontece sob necessidade (item 28b, condicional). Estimativas a medir, não fatos: Postgres 100–250 MB, MLflow 300–500 MB, Prefect server + worker 500–800 MB, Grafana 100–200 MB, Tailscale ~30 MB, job de ingestão com pandas 200–400 MB de pico.
 - **Repositórios públicos** (P2, 2026-11-07), do próprio usuário. A VPS clona o repo e puxa as imagens do GHCR sem token nem `docker login`; o job de score instala o pacote `models` sem token. **Nenhum segredo entra no git, nem no histórico**: num repo público, um segredo commitado uma vez é público para sempre e precisa ser trocado (reescrever o histórico não basta). Segredos só no `infra/.env` da VPS (`chmod 600`, fora do git) e nos GitHub Secrets.
 
@@ -139,12 +139,13 @@ Caminho crítico até ligar `raw.weather_forecast` (prioridade do doc): 01 → 0
 | P1 | Toolchain | **Aprovada**: uv, ruff, pytest, hatchling, Python 3.12, CI no GitHub Actions, pacotes na raiz. A instalação do `uv` e do Docker Desktop no Windows é conferida no passo 1 do 01 e nos riscos do 05 | 01, 05 |
 | P2 | Dono e visibilidade dos repositórios | **Públicos, do próprio usuário**. A VPS puxa código e imagens do GHCR sem token de leitura; o score instala `models` sem token. Nenhum segredo no git, nem no histórico | 01, 02, 37, 38, 39, 40, 44, 46, 50 |
 | P3 | VPS | **Resolvida em parte**: provedor "Regular Cloud Compute", 1 vCPU, 1 GB de RAM, 25 GB de SSD, 1 TB de transferência. Swap de 2 GB, `mem_limit` por serviço, checkpoint de memória 28a antes do PR 29 e upgrade 28b só sob necessidade. Falta confirmar SO e arquitetura (`uname -m`), registrados no item 02 | 02, 03, 05, 10, 11, 16, 28a, 28b, 29, 30, 31, 34, 35, 44, 46, 47, 50, 57, 59 |
-| P4 | Rede | **Só Tailscale**. Sem domínio, sem Caddy, sem certificado público, sem 443 pública. HTTPS e acesso por `tailscale serve` (um hostname `*.ts.net`, uma porta por UI) ou acesso direto pelo IP/nome do tailnet (decisão fina no ADR de rede). A 22 pública fica aberta só no provisionamento e é fechada quando o SSH pela tailnet funciona | 02, 03, 04, 10, 12, 28, 29, 30, 31, 35, 38, 39, 40, 47, 50, 55, 56 |
+| P4 | Rede | **Só Tailscale**. Sem domínio, sem proxy com autenticação, sem certificado público, sem 443 pública. HTTPS e acesso por `tailscale serve` (um hostname `*.ts.net`, uma porta por UI) (ADR 0003). A 22 pública fica aberta só no provisionamento e é fechada quando o SSH pela tailnet funciona | 02, 03, 04, 10, 12, 28, 29, 30, 31, 35, 38, 39, 40, 47, 50, 55, 56 |
 | P5 | Coleta da previsão antes do ONS | **Aprovada**: 13–17 ficam antes do ONS, como planejado | 13, 14, 15, 17 |
+| P15 | Postgres na tailnet | **Loopback + `tailscale serve --tcp=5432`**: `127.0.0.1:5432`, sem sidecar do Tailscale no compose e sem dependência da ordem de boot; o `After=tailscaled.service` deixa de ser necessário (ADR 0003) | 02, 03, 10, 12 |
 
 ## Pontos de decisão em aberto para o usuário
 
-Decidir antes do PR indicado. Os marcados com ADR precisam do ADR aprovado antes do código. A numeração P6–P18 foi mantida para não quebrar as referências nas specs.
+Decidir antes do PR indicado. Os marcados com ADR precisam do ADR aprovado antes do código. A numeração P6–P18 foi mantida (a P15 está em "Decisões resolvidas") para não quebrar as referências nas specs.
 
 | Id | Pergunta | Recomendação deste plano | Bloqueia |
 | --- | --- | --- | --- |
@@ -157,22 +158,27 @@ Decidir antes do PR indicado. Os marcados com ADR precisam do ADR aprovado antes
 | P12 (ADR de execução) | Como o score sabe a versão do pacote `models`? Esquema de tags do repo `models` | Tag `models_package=<tag git>` na versão do modelo no MLflow; semver | 43, 44 |
 | P13 (ADR de execução) | Tipo de `conn` em `build_features`; objeto `model` em `predict`; colunas extras na saída; versão do MLflow igual em servidor, notebook e score | `sqlalchemy.Connection`; `mlflow.pyfunc.load_model`; saída estrita; mesma versão | 29, 42 |
 | P14 (ADR de contrato) | De onde vem o "real" do monitoramento? | Função `load_actuals(conn, target_date)` no módulo dela | 53 |
-| P15 | Postgres publicado no IP do Tailscale (depende da ordem de boot), em loopback + `tailscale serve --tcp=5432` (mesmo modelo das UIs, sem dependência de boot) ou sidecar do Tailscale no compose? | Loopback + `tailscale serve --tcp`, se o ADR de rede ficar com `tailscale serve`; senão, IP do Tailscale com `After=tailscaled.service` | 10, 12 |
 | P16 (ADR) | Backup: destino (B2 ou S3), agendamento (systemd no host ou Prefect), criptografia | B2, systemd, avaliar `rclone crypt` | 57, 59 |
 | P17 | Monitor externo para quando o próprio Prefect cair? Com rede só Tailscale, um monitor de uptime externo não alcança a VPS | Heartbeat de saída: o vigia pinga um serviço tipo healthchecks.io; a falta do ping gera o aviso | 56 |
 | P18 (ADR de contrato) | Formato de `location_id` | Slug minúsculo (`sao_paulo`) | 09 |
 
 Perguntas menores, registradas na seção 9 de cada spec: gravar dado fora de faixa antes de falhar (15); "só leitura" da cientista no Prefect não é garantido pelo OSS, e sem proxy a ACL é a única barreira (30); camada opcional de autenticação embutida do Prefect (30); uma credencial ou dois workers para ingestão e score, lembrando o custo de memória (46); montar `/` do host no worker para medir disco (56); checar memória no vigia (56); ligar o recurso "Tailscale SSH" exigiria replanejar 38 e 39 (02, 39); restrição de portas do `tailscale serve` na versão instalada (03).
 
+## ADRs já escritos
+
+- `docs/adr/0001-english-naming-convention.md`: convenção de nomes em inglês.
+- `docs/adr/0002-python-toolchain-and-package-layout.md`: toolchain Python e layout de pacotes (P1).
+- `docs/adr/0003-tailscale-only-network.md`: rede só Tailscale (P4, P15).
+
 ## ADRs a escrever (o planner não escreve ADR)
 
-1. Toolchain Python e layout de pacotes (P1) — antes do 01. A decisão já foi aprovada pelo usuário; o ADR só a registra, mas precisa estar mergeado antes do 01.
-2. **Rede só Tailscale (desvio de `docs/plataforma-ml.md`, que prevê Caddy)** (P4) — antes do 03. Registra: sem portas públicas, sem domínio, sem Caddy; ACL do Tailscale como controle de acesso; SSH pelo OpenSSH dentro da tailnet (não o recurso "Tailscale SSH", por causa do `command=` do deploy); e a decisão fina entre `tailscale serve` (recomendado) e acesso direto pelo IP/nome do tailnet. O mesmo PR do ADR deve atualizar os textos que ainda citam Caddy fora de `docs/plans/` (`AGENTS.md`, primeira linha; `docs/plataforma-ml.md`, stack, árvore `infra/caddy/`, operação e roadmap; `.claude/rules/infra.md`, regra do firewall), que este planner não pode editar.
-3. Operação interina antes do Prefect: deploy manual e supercronic (P6, P7) — antes do 11/16; marcado `superseded` nos PRs 36 e 39.
-4. Contrato de dados v1 de `raw` e `ref` (P8, P18) — antes do 09.
-5. Execução de modelos (P12, P13) — antes do 42; precisa da concordância da cientista.
-6. Fonte do real no monitoramento (P14) — antes do 53; precisa da concordância dela.
-7. Backup (P16) — antes do 57.
+O número de cada ADR é dado quando ele for escrito.
+
+1. Operação interina antes do Prefect: deploy manual e supercronic (P6, P7) — antes do 11/16; marcado `superseded` nos PRs 36 e 39.
+2. Contrato de dados v1 de `raw` e `ref` (P8, P18) — antes do 09.
+3. Execução de modelos (P12, P13) — antes do 42; precisa da concordância da cientista.
+4. Fonte do real no monitoramento (P14) — antes do 53; precisa da concordância dela.
+5. Backup (P16) — antes do 57.
 
 ## Desvios em relação às instruções do `task-planner`
 

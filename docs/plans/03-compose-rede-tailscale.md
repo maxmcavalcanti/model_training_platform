@@ -2,12 +2,12 @@
 
 > Executa: agente. Depende de: 01. Branch sugerida: `feat/compose-tailscale-network`.
 > Testes: test-writer primeiro (vermelho), depois implementação (verde), depois refatorar com a suíte verde.
-> Decisão do usuário (2026-11-07, P4 resolvida): rede **só Tailscale**. Sem domínio público, sem proxy com autenticação, sem certificado público. Isso é desvio de `docs/plataforma-ml.md` (que prevê Caddy na stack) e exige o ADR da seção 10 mergeado antes deste PR.
+> Decisão do usuário (2026-11-07, P4 resolvida): rede **só Tailscale**. Sem domínio público, sem proxy com autenticação, sem certificado público. Decisão registrada no ADR 0003 (`docs/adr/0003-tailscale-only-network.md`), já na `main`.
 
 ## 1. Objetivo
 
 Criar `infra/docker-compose.yml` com um serviço mínimo de saúde (`health`) publicado só em loopback, o script versionado que expõe as UIs na tailnet com `tailscale serve`, e testes que travam as regras de infra (nenhuma porta em `0.0.0.0`, `restart`, `mem_limit`, segredos) em todo compose do repo.
-É a base onde Postgres, MLflow, Prefect e Grafana entram nas Fases 1, 3 e 4, sempre em loopback (ou no IP do Tailscale, para o Postgres, conforme P15) e nunca na internet.
+É a base onde Postgres, MLflow, Prefect e Grafana entram nas Fases 1, 3 e 4, sempre em loopback (o Postgres também, P15) e nunca na internet.
 
 ## 2. Fora do escopo
 
@@ -18,7 +18,7 @@ Criar `infra/docker-compose.yml` com um serviço mínimo de saúde (`health`) pu
 
 ## 3. Fase do roadmap
 
-Fase 0 — Base da VPS. O doc diz "Caddy com HTTPS e autenticação"; com a decisão de rede só Tailscale, este PR entrega o equivalente: HTTPS pelo certificado `*.ts.net` do `tailscale serve` e acesso restrito a quem está na tailnet (ACL do Tailscale no lugar do `basic_auth`).
+Fase 0 — Base da VPS: "UIs na tailnet por `tailscale serve` (HTTPS `*.ts.net`), ACL do Tailscale como controle de acesso" (`docs/plataforma-ml.md`, roadmap; ADR 0003).
 
 ## 4. Arquivos a criar ou alterar
 
@@ -34,15 +34,13 @@ Fase 0 — Base da VPS. O doc diz "Caddy com HTTPS e autenticação"; com a deci
 Regras que os testes codificam (de `.claude/rules/infra.md`, copiadas aqui):
 
 > - Todo serviço no compose tem `restart: unless-stopped`.
-> - MLflow e Prefect não têm autenticação própria: nunca expor sem proxy com auth ou sem Tailscale.
-> - Firewall: só 22 e 443 abertos, ou nenhuma porta pública. Não abrir porta para "testar".
+> - MLflow, Prefect e Grafana não têm autenticação adequada: só em `127.0.0.1`, expostos na tailnet por `tailscale serve`; a ACL do Tailscale é o controle de acesso (ADR 0003).
+> - Firewall: nenhuma porta pública (ADR 0003). A 22 pública só durante o provisionamento. Nenhuma porta do compose em `0.0.0.0` (o Docker passa por cima do ufw). Não ligar o Tailscale SSH. Não abrir porta para "testar".
 > - `.env` da VPS fica fora do git, permissão 600. Segredos do CI vão em GitHub Secrets.
-
-Com a decisão de rede, vale o ramo "nenhuma porta pública" (a 22 pública só existe durante o provisionamento, item 02) e o ramo "com Tailscale" da segunda regra.
 
 Fato que motiva o teste mais importante: porta publicada pelo Docker com `ports:` **passa por cima do ufw**. Uma porta em `0.0.0.0` fica na internet mesmo com o firewall fechado. Por isso nenhuma porta pode ser publicada em `0.0.0.0`: só em `127.0.0.1` (loopback, depois exposta pelo `tailscale serve`) ou no IP do Tailscale (faixa `100.64.0.0/10`).
 
-Modelo de acesso (recomendado; a escolha fina é o ADR da seção 10):
+Modelo de acesso (ADR 0003):
 
 | UI | Publicação no host (compose) | URL na tailnet (`tailscale serve`) | PR |
 | --- | --- | --- | --- |
@@ -50,7 +48,7 @@ Modelo de acesso (recomendado; a escolha fina é o ADR da seção 10):
 | MLflow | `127.0.0.1:5000` | `https://<host>.ts.net:5000` | 29 |
 | Prefect | `127.0.0.1:4200` | `https://<host>.ts.net:4200` | 30 |
 | Grafana | `127.0.0.1:3000` | `https://<host>.ts.net:3000` | 47 |
-| Postgres (não é HTTP) | P15: `${POSTGRES_BIND_IP}` = IP do Tailscale, ou `127.0.0.1:5432` + `tailscale serve --tcp=5432` | `<host>.ts.net:5432` | 10 |
+| Postgres (não é HTTP) | `127.0.0.1:5432` + `tailscale serve --tcp=5432` (P15) | `<host>.ts.net:5432` | 10 |
 
 `<host>.ts.net` é o nome MagicDNS da VPS (variável `TS_HOSTNAME`, não é segredo). Um hostname, uma porta por UI.
 
@@ -110,7 +108,6 @@ Os testes leem todos os arquivos `infra/docker-compose*.yml` que existirem.
 
 ## 9. Riscos e perguntas em aberto
 
-- ADR de rede (seção 10): `tailscale serve` com loopback (recomendado: HTTPS válido `*.ts.net`, nada escuta fora do loopback) contra acesso direto pelo IP ou nome do tailnet (`*_BIND_IP` = IP do Tailscale, HTTP puro dentro do túnel WireGuard, sem script, mas com a dependência de ordem de boot da P15 em todo serviço). Se o ADR escolher o acesso direto, os casos 9 a 11 e o script saem, e o caso 5 continua valendo.
 - Porta igual no loopback e na tailnet (ex.: 5000 e 5000): o `tailscale serve` atende no IP do Tailscale, dentro do próprio tailscaled, e o Docker escuta em `127.0.0.1`; não deve haver conflito. Se a versão instalada acusar conflito, use portas de tailnet diferentes (ex.: 15000) e ajuste o caso 9.
 - Se a versão do `tailscale serve` restringir as portas HTTPS aceitas, a alternativa é servir por caminho (`--set-path`) num só porto, o que exige configurar caminho base em MLflow, Prefect e Grafana. Pergunte antes de mudar.
 - `tailscale serve` exige HTTPS e MagicDNS habilitados no painel do Tailscale, e que o usuário `deploy` seja operador (`sudo tailscale set --operator=deploy`, item 02). Itens 02 e 04.
@@ -119,4 +116,4 @@ Os testes leem todos os arquivos `infra/docker-compose*.yml` que existirem.
 
 ## 10. Decisões que exigem ADR
 
-- ADR "Rede só Tailscale (desvio de `docs/plataforma-ml.md`, que prevê Caddy)": sem portas públicas, sem domínio, sem Caddy; HTTPS e acesso por `tailscale serve` (um hostname `*.ts.net`, uma porta por UI) ou acesso direto pelo IP/nome do tailnet (decidir entre os dois); ACL do Tailscale como controle de acesso; SSH pelo OpenSSH dentro da tailnet (ver item 02). Precisa estar mergeado antes deste PR.
+Nenhuma nova. A rede só Tailscale está no ADR 0003 (`docs/adr/0003-tailscale-only-network.md`), já na `main`.

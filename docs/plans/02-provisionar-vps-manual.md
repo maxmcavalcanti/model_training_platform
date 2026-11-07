@@ -27,8 +27,7 @@ Uma VPS com usuário não-root, Docker, swap, firewall fechado e Tailscale, pron
 - [ ] `sudo systemctl enable docker` (sobe no boot).
 - [ ] Instalar Tailscale (tailscale.com/download/linux), `sudo tailscale up`, `sudo systemctl enable tailscaled`.
 - [ ] Tornar `deploy` operador do Tailscale, para o script `infra/scripts/tailscale-serve.sh` (PR 03) e o `deploy.sh` (PR 39) rodarem sem sudo: `sudo tailscale set --operator=deploy`.
-- [ ] Não habilitar o recurso "Tailscale SSH" (`tailscale up --ssh`): ele assume a porta 22 no IP do Tailscale e ignora o `authorized_keys`, e o deploy do CI (itens 38 e 39) depende da restrição `command=` do `authorized_keys`. O acesso é OpenSSH normal, só que pela tailnet. Se quiser o Tailscale SSH mesmo assim, registre no ADR de rede e replaneje 38 e 39.
-- [ ] Só se a P15 ficar com "Postgres no IP do Tailscale": fazer o Docker esperar o Tailscale no boot, `sudo systemctl edit docker` e adicionar `[Unit]` / `After=tailscaled.service` / `Wants=tailscaled.service`. Na outra opção da P15 (loopback + `tailscale serve --tcp`) isso não é necessário, mas também não atrapalha.
+- [ ] Não habilitar o recurso "Tailscale SSH" (`tailscale up --ssh`): ele assume a porta 22 no IP do Tailscale e ignora o `authorized_keys`, e o deploy do CI (itens 38 e 39) depende da restrição `command=` do `authorized_keys`. O acesso é OpenSSH normal, só que pela tailnet. Se quiser o Tailscale SSH mesmo assim, revise o ADR 0003 (`docs/adr/0003-tailscale-only-network.md`) e replaneje 38 e 39.
 - [ ] Firewall com ufw, em duas etapas:
   1. Início: `sudo ufw default deny incoming`, `sudo ufw allow 22/tcp`, `sudo ufw allow in on tailscale0`, `sudo ufw enable`.
   2. Fechar a 22 pública: do notebook, confirme que `ssh deploy@<nome-tailscale>` entra pela tailnet; só então `sudo ufw delete allow 22/tcp`. Se você se trancar fora, use o console web do provedor.

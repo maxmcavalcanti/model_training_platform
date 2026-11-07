@@ -17,7 +17,7 @@ Subir o MLflow (tracking + model registry) com backend no banco `mlflow` e artef
 
 ## 3. Fase do roadmap
 
-Fase 3 — "MLflow e Prefect no compose". O doc diz "atrás do Caddy"; pelo ADR de rede (PR 03, rede só Tailscale, desvio do doc), o acesso é pela tailnet, sem proxy com autenticação.
+Fase 3 — "MLflow e Prefect no compose, só na tailnet (`tailscale serve`)". Pelo ADR 0003, o acesso é pela tailnet, sem proxy com autenticação.
 
 ## 4. Arquivos a criar ou alterar
 
@@ -80,4 +80,4 @@ Regras gerais já cobertas pelos testes do PR 03 (devem continuar passando): nen
 
 ## 10. Decisões que exigem ADR
 
-Coberto pelo ADR "Rede só Tailscale" (PR 03).
+Coberto pelo ADR 0003 (`docs/adr/0003-tailscale-only-network.md`).
