@@ -19,5 +19,6 @@ Regras:
 - Rode a suíte e confirme que os testes novos FALHAM pelo motivo certo: asserção falhando ou comportamento ausente. Nunca ImportError por typo, erro de sintaxe ou fixture quebrada; se for um desses, corrija o teste e rode de novo. Cole o comando e a saída real.
 - Cada caso de teste do plano deve ter ao menos um teste mapeado. Se algum caso ficar sem teste, pare e reporte.
 - O commit dos testes é separado do código de produção e vem primeiro: um commit atômico só dos testes, na branch indicada, com mensagem iniciando com `test:`. Não faça push. Nunca commite segredos.
+- Nomes de teste, fixtures, comentários e mensagem de commit em inglês, com os nomes de `docs/adr/0001-english-naming-convention.md`.
 
 Devolva: a branch, o commit, o comando e a saída das falhas, o mapeamento caso do plano → teste, e as ambiguidades do plano.

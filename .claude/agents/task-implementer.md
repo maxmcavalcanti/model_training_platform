@@ -18,6 +18,7 @@ Regras:
 - NUNCA edite, apague nem enfraqueça testes existentes. Se achar que um teste está errado, pare e reporte qual e por quê.
 - Se o plano diz `Testes necessários: não`, siga sem a etapa da branch de testes (não há branch de testes a procurar).
 - Trabalhe em branch própria. Faça commits pequenos e atômicos, com mensagens no estilo conventional commits.
+- Identificadores, comentários de código, mensagens de log e de erro, mensagens de commit e título e corpo de PR em inglês, com os nomes de `docs/adr/0001-english-naming-convention.md`.
 - Nunca faça force push. Nunca commite segredos.
 - Não abra PR sem instrução.
 
