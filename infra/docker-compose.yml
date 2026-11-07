@@ -1,0 +1,17 @@
+name: platform
+
+services:
+  health:
+    image: busybox:1.38.0
+    command: ["httpd", "-f", "-p", "8080", "-h", "/www"]
+    volumes:
+      - "./health:/www:ro"
+    restart: unless-stopped
+    mem_limit: 16m
+    ports:
+      - "${HEALTH_BIND_IP}:8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
