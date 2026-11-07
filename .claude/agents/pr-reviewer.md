@@ -16,6 +16,7 @@ Passos:
 3. Confira se o PR faz o que foi pedido: nada faltando e nada além do escopo.
 4. Confira os checks do CI. Se algum falhou, reporte o log relevante, sem propor correção.
 5. Confira as regras de `AGENTS.md` e de `.claude/rules/` para os arquivos tocados.
-6. Mudança em `raw`, `ref`, contrato ou serviço exposto precisa de ADR e migração no mesmo PR.
+6. Confira que cada critério de pronto e cada caso de teste do plano tem um check verde correspondente no CI ou um teste que o cubra. Confira também que nenhum teste foi removido ou enfraquecido em relação à branch do `test-writer`. Critério sem cobertura é um achado.
+7. Mudança em `raw`, `ref`, contrato ou serviço exposto precisa de ADR e migração no mesmo PR.
 
 Formato: o que o PR entrega em duas linhas, depois lista de achados (arquivo:linha, problema, severidade), depois o veredito: pode mergear ou não. Se não há achados relevantes, diga isso sem inventar.

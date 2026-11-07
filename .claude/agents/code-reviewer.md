@@ -14,7 +14,7 @@ Procure, nesta ordem:
 1. **Correção:** bugs, casos de borda, jobs que não são idempotentes, upsert faltando, `ingerido_em` ausente, checagem de qualidade ausente.
 2. **Fronteira:** mudança em `raw` ou `ref` sem migração e ADR, mudança na assinatura do contrato, permissão de usuário do Postgres errada.
 3. **Segurança:** segredo no código, serviço exposto sem auth, porta nova aberta.
-4. **Testes:** o comportamento novo tem teste que falharia sem ele?
+4. **Testes:** o comportamento novo tem teste que falharia sem ele? Os testes verificam o comportamento do plano ou só espelham a implementação?
 
 Ignore estilo e formatação (o linter cuida disso). Não invente problema: se não achou nada relevante, diga isso.
 

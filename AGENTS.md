@@ -28,8 +28,13 @@ Ainda não há código. Quando o ambiente de desenvolvimento existir, liste aqui
 
 ## Fluxo de trabalho
 
-- Todo o código é escrito por agentes, com um plano aprovado antes de implementar.
 - Mudança estrutural gera ADR em `docs/adr/` antes do código.
-- Antes de abrir PR, rode o agente `code-reviewer`. O agente `pr-reviewer` revisa o PR contra o plano.
+- Fluxo de uma tarefa:
+  1. `task-planner` grava o plano com casos de teste em `docs/plans/` e o usuário aprova.
+  2. `test-writer` escreve os testes e confirma que falham (pular se o plano disser "Testes necessários: não").
+  3. `task-implementer` implementa em worktree partindo da branch com os testes, sem editar testes.
+  4. O CI roda tudo.
+  5. `code-reviewer` revisa antes do PR.
+  6. `pr-reviewer` revisa o PR contra o plano.
 - Uma fase do roadmap por vez. Não adiante itens de fases futuras.
 - Dê evidência de que funciona: o comando rodado e a saída, não só "deve funcionar".
