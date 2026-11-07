@@ -1,0 +1,72 @@
+# 46 — Flow `score_modelos` e deployment às 07:30
+
+> Executa: agente. Depende de: 45. Branch sugerida: `feat/flow-score`.
+> TDD: test-writer (vermelho) → implementação (verde) → refatorar.
+
+## 1. Objetivo
+
+Criar o flow diário que, para cada modelo com `champion`, roda `flows.score_um` no ambiente isolado da versão certa do pacote `modelos`, e agendá-lo às 07:30 BRT.
+Falha de um modelo não impede os outros; o flow termina `Failed` se algum falhou.
+
+## 2. Fora do escopo
+
+- Monitoramento (Fase 5). Alertas (PR 55).
+
+## 3. Fase do roadmap
+
+Fase 4 — "Job genérico de score lendo `@champion`".
+
+## 4. Arquivos a criar ou alterar
+
+| Caminho | Motivo |
+| --- | --- |
+| `flows/score_flow.py` | `@flow(name="score_modelos")` e `@task pontuar_modelo` |
+| `flows/deployments.py` | Entrada `score_modelos` com cron `30 7 * * *` |
+| `infra/docker-compose.yml` | `prefect-worker`: `DATABASE_URL_SCORER`, `MLFLOW_TRACKING_URI=http://mlflow:5000`, `MODELOS_REPO`, `MODELOS_GIT_TOKEN`; `depends_on: mlflow` |
+| `infra/.env.example` | `POSTGRES_SCORER_SENHA` |
+| `tests/test_flow_score.py`, `tests/test_deployments.py`, `tests/infra/test_compose.py` | Testes (test-writer) |
+
+Do doc: "07:30 `score_modelos` — Para cada modelo com `champion`, gera previsões do dia". "Trocar o alias `champion` para outra versão é o deploy. Nenhum PR na plataforma, nenhuma ação minha."
+
+Código existente: `flows/registro.py` (`listar_champions`), `flows/executor.py` (`montar_comando`, `executar`, `ExecucaoFalhou`), `flows/deployments.py` (`DEPLOYMENTS`, `registrar`), `flows/score_um.py` (argumentos `--modelo --versao --data --gerado-em`).
+
+## 5. Passos
+
+1. (test-writer) Testes da seção 8 com `prefect_test_harness`, `monkeypatch` de `listar_champions` e de `executar` (registrando comandos). Acrescente em `tests/test_deployments.py`: `score_modelos` com `30 7 * * *`. Em `tests/infra/test_compose.py`: o worker tem `DATABASE_URL_SCORER` com o usuário `scorer` e `MLFLOW_TRACKING_URI` interno. Confirme falha. Commit `test: add score flow tests`.
+2. (implementer) `flows/score_flow.py`:
+   - `score_modelos(data_ref: date | None = None)`: `data_ref` padrão = hoje em `America/Sao_Paulo`; `gerado_em` = agora (UTC), o mesmo para todos os modelos da execução.
+   - Lista os champions; nenhum → log "nenhum modelo com champion" e `Completed`.
+   - Para cada champion, a task `pontuar_modelo` (sem retries): `pacote_versao` ausente → falha da task com mensagem "modelo X sem tag pacote_modelos"; senão `executar(montar_comando(pacote_versao, "flows.score_um", [...]))`.
+   - Submete as tasks e espera todas; se alguma falhou, o flow levanta erro listando os modelos que falharam (depois de todas terminarem).
+3. `flows/deployments.py`: entrada `score_modelos` às `30 7 * * *`.
+4. Compose: variáveis do worker como na tabela; `.env.example` com `POSTGRES_SCORER_SENHA`.
+5. Rode os critérios de pronto.
+
+## 6. Critérios de pronto
+
+| Comando | Saída esperada |
+| --- | --- |
+| `uv run pytest tests/test_flow_score.py tests/test_deployments.py tests/infra/` | Todos passam |
+| `uv run pytest` | Suíte verde |
+| `gh pr checks` | Verde |
+
+## 7. Testes necessários
+
+`sim`: isolamento de falhas entre modelos e o comportamento sem champion são regras de operação.
+
+## 8. Casos de teste
+
+1. Dois champions (`a` com `v0.1.0`, `b` com `v0.2.0`) → `executar` chamado duas vezes, cada uma com o `--with` da sua versão e o mesmo `--gerado-em`; flow `Completed`.
+2. Nenhum champion → `executar` não é chamado; `Completed`.
+3. `a` falha (`ExecucaoFalhou`) e `b` funciona → `executar` chamado para os dois; flow `Failed` com mensagem citando `a`.
+4. Champion sem `pacote_versao` → essa task falha, as outras rodam; flow `Failed` citando o modelo.
+5. `score_modelos(data_ref=date(2026,11,7))` → todos os comandos com `--data 2026-11-07`.
+6. Deployment `score_modelos` com `30 7 * * *`, fuso `America/Sao_Paulo`, pool `plataforma`.
+
+## 9. Riscos e perguntas em aberto
+
+- O worker passa a ter duas credenciais (`ingestor` e `scorer`). Alternativa mais rígida: um segundo worker, num pool `score`, só com `scorer`. Este plano fica com um worker; o subprocesso só recebe `DATABASE_URL_SCORER` (o executor deve repassar só as variáveis necessárias). Confirmar com o usuário.
+
+## 10. Decisões que exigem ADR
+
+Nenhuma além do ADR "Execução de modelos".
