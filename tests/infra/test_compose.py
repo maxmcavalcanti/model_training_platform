@@ -28,8 +28,9 @@ TAILSCALE_NETWORK = ipaddress.ip_network("100.64.0.0/10")
 SECRET_KEY_MARKERS = ("PASSWORD", "SENHA", "TOKEN", "SECRET", "HASH")
 ENV_REFERENCE = re.compile(r"^\$\{[^}]+\}$")
 
-# "127.0.0.1:8080:8080" or "${X_BIND_IP}:8080:8080" or "${X_BIND_IP:-127.0.0.1}:8080:8080",
-# optionally followed by a protocol such as "/tcp".
+# "127.0.0.1:8080:8080" or "${X_BIND_IP:-<default>}:8080:8080" (the default is validated by
+# is_acceptable_port), optionally followed by a protocol such as "/tcp". A bare "${X_BIND_IP}"
+# still matches here (default is None) so that is_acceptable_port can reject it explicitly.
 SHORT_PORT = re.compile(
     r"^(?P<ip>127\.0\.0\.1|\$\{(?P<var>[A-Z][A-Z0-9_]*_BIND_IP)(?::-(?P<default>[^}]*))?\})"
     r":(?P<host>\d+):(?P<container>\d+)(?:/[a-z]+)?$"
@@ -67,7 +68,12 @@ def services_with_forbidden_ports(services: dict, allowed: frozenset[str]) -> li
 
 
 def is_acceptable_port(port: object) -> bool:
-    """Case 4: the published port has an explicit loopback (or ``*_BIND_IP``) host IP."""
+    """Case 4: the published port has an explicit loopback host IP.
+
+    Accepted: a literal ``127.0.0.1`` or ``${X_BIND_IP:-127.0.0.1}``. A bare ``${X_BIND_IP}``
+    is rejected: when the variable is missing it becomes ``:8080:8080`` and Docker publishes
+    on 0.0.0.0, bypassing ufw.
+    """
     if isinstance(port, dict):
         # Long syntax: only a literal 127.0.0.1 host_ip is accepted.
         return port.get("host_ip") == LOOPBACK and port.get("published") is not None
@@ -76,8 +82,10 @@ def is_acceptable_port(port: object) -> bool:
     match = SHORT_PORT.match(port)
     if match is None:
         return False
-    # A "${X_BIND_IP:-default}" fallback must itself be loopback.
-    return match.group("default") in (None, LOOPBACK)
+    if match.group("var") is None:
+        return True  # literal 127.0.0.1
+    # The variable form requires a default, and it must be exactly 127.0.0.1.
+    return match.group("default") == LOOPBACK
 
 
 def bad_ports(services: dict) -> list[tuple[str, object]]:
@@ -175,12 +183,9 @@ def loopback_published_ports(service: dict, env: dict[str, str]) -> set[int]:
             continue
         match = SHORT_PORT.match(port)
         assert match is not None
-        if match.group("var") is None or match.group("default") is not None:
-            is_loopback = True  # literal 127.0.0.1, or an acceptable 127.0.0.1 default
-        else:
-            is_loopback = env.get(match.group("var")) == LOOPBACK
-        if is_loopback:
-            ports.add(int(match.group("host")))
+        # An acceptable short port is always loopback: a literal 127.0.0.1 or a
+        # "${X_BIND_IP:-127.0.0.1}" default, so ``env`` is not needed to resolve it.
+        ports.add(int(match.group("host")))
     return ports
 
 
@@ -269,8 +274,9 @@ def test_relative_volume_sources_exist(all_services):
     [
         "127.0.0.1:8080:8080",
         "127.0.0.1:8080:8080/tcp",
-        "${HEALTH_BIND_IP}:8080:8080",
         "${HEALTH_BIND_IP:-127.0.0.1}:8080:8080",
+        "${X_BIND_IP:-127.0.0.1}:8080:8080",
+        "${X_BIND_IP:-127.0.0.1}:8080:8080/tcp",
         {"target": 8080, "published": 8080, "host_ip": "127.0.0.1"},
     ],
 )
@@ -293,6 +299,11 @@ def test_port_check_accepts_safe_ports(port):
         "localhost:8080:8080",
         "${HEALTH_PORT}:8080:8080",
         "${HEALTH_BIND_IP:-0.0.0.0}:8080:8080",
+        "${X_BIND_IP}:8080:8080",
+        "${X_BIND_IP}:8080:8080/tcp",
+        "${X_BIND_IP:-0.0.0.0}:8080:8080",
+        "${X_BIND_IP:-}:8080:8080",
+        "${X_BIND_IP:-100.64.0.1}:8080:8080",
         {"target": 8080, "published": 8080},
         {"target": 8080, "published": 8080, "host_ip": "0.0.0.0"},
         {"target": 8080, "published": 8080, "host_ip": "::"},
