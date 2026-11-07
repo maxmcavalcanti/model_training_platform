@@ -1,6 +1,6 @@
 # Plataforma ML
 
-Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect, Grafana, Caddy, Tailscale). Este repositório é o `platform` do desenho em `docs/plataforma-ml.md`. Os modelos vivem em outro repositório (`models`) e falam com a plataforma pelo contrato.
+Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect, Grafana, Tailscale). Este repositório é o `platform` do desenho em `docs/plataforma-ml.md`. Os modelos vivem em outro repositório (`models`) e falam com a plataforma pelo contrato.
 
 ## Fronteira (nunca cruzar sem combinar)
 

@@ -48,8 +48,7 @@ Tudo roda num único `docker compose`, com ferramentas open source que ela vai e
 | MLflow | Tracking de experimentos + model registry | Ela (principal) | Artefatos em volume local servidos pelo próprio MLflow (`--serve-artifacts`); MinIO só se crescer |
 | Prefect 3 (server + worker) | Agenda e executa os jobs; UI com histórico de execuções e logs | Os dois | Dagster é alternativa válida; Prefect é mais simples para começar |
 | Grafana | Painéis de dados, previsões e erro; alertas | Os dois | Lê o Postgres com usuário somente leitura |
-| Caddy | Proxy reverso com HTTPS automático | Plataforma | MLflow e Prefect não têm autenticação própria: nunca expor sem proxy com auth |
-| Tailscale | Acesso privado à VPS e às UIs | Os dois | Alternativa a abrir portas; ela acessa Postgres e MLflow do notebook local como se fosse rede local |
+| Tailscale | Rede privada: acesso à VPS, às UIs (`tailscale serve`, HTTPS `*.ts.net`) e ao Postgres | Os dois | Nenhuma porta pública (ADR 0003). MLflow e Prefect não têm autenticação própria: ficam em loopback, expostos só na tailnet; a ACL do Tailscale é o controle de acesso. Ela acessa Postgres e MLflow do notebook local como se fosse rede local |
 
 **Onde ela trabalha:** localmente, no notebook dela, conectada via Tailscale ao Postgres (usuário próprio) e ao MLflow da VPS. Não precisa de Jupyter no servidor.
 
@@ -65,8 +64,7 @@ Dois repositórios, um por dono: assim a fronteira fica visível no próprio Git
 platform/
 ├── infra/
 │   ├── docker-compose.yml
-│   ├── caddy/Caddyfile
-│   └── scripts/          # bootstrap da VPS, backup, restore
+│   └── scripts/          # bootstrap da VPS, tailscale serve, backup, restore
 ├── migrations/           # Alembic: schemas raw, ref, features, predictions, monitoring
 ├── ingestion/
 │   ├── ons.py            # carga diária
@@ -176,7 +174,7 @@ Merge na `main` é a única forma de algo mudar em produção, nos dois reposit�
 - **Segredos:** GitHub Secrets para o CI; `.env` na VPS fora do git, com permissão 600
 - **Backups:** `pg_dump` diário dos três bancos + volume de artefatos do MLflow, enviados para fora da VPS (S3 ou Backblaze B2), retenção de 14 dias; testar um restore uma vez por mês
 - **Alertas:** falha de flow no Prefect, disco acima de 80%, serviço fora do ar → Telegram
-- **Rede:** firewall com só 22 e 443 abertos, ou nenhuma porta pública usando só Tailscale
+- **Rede:** só Tailscale, nenhuma porta pública (ADR 0003). Serviços em loopback, expostos na tailnet por `tailscale serve` (Postgres por `--tcp=5432`); ACL do Tailscale como controle de acesso; SSH pelo OpenSSH dentro da tailnet
 - **Reboot:** `restart: unless-stopped` em todos os serviços; testar reiniciando a VPS
 
 ## Roadmap
@@ -186,7 +184,7 @@ A previsão do tempo entra no ar logo na Fase 2, porque cada dia sem coletar é 
 **Fase 0 — Base da VPS**
 
 - [ ] Docker, firewall, Tailscale, usuário não-root
-- [ ] Caddy com HTTPS e autenticação
+- [ ] UIs na tailnet por `tailscale serve` (HTTPS `*.ts.net`), ACL do Tailscale como controle de acesso
 - [ ] Pronto quando: um reboot traz tudo de volta sem intervenção
 
 **Fase 1 — Banco e carga do ONS** → libera a exploração dela
@@ -204,7 +202,7 @@ A previsão do tempo entra no ar logo na Fase 2, porque cada dia sem coletar é 
 
 **Fase 3 — MLflow, Prefect e CI/CD** → libera o treino com registro
 
-- [ ] MLflow e Prefect no compose, atrás do Caddy
+- [ ] MLflow e Prefect no compose, só na tailnet (`tailscale serve`)
 - [ ] Ingestões migradas para flows do Prefect
 - [ ] Pipelines do GitHub Actions nos dois repositórios
 - [ ] Pronto quando: um merge na `main` chega à VPS sem eu entrar nela
