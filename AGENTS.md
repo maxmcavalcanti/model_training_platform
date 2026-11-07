@@ -1,10 +1,10 @@
 # Plataforma ML
 
-Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect, Grafana, Caddy, Tailscale). Este repositório é o `plataforma` do desenho em `docs/plataforma-ml.md`. Os modelos vivem em outro repositório (`modelos`) e falam com a plataforma pelo contrato.
+Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect, Grafana, Caddy, Tailscale). Este repositório é o `platform` do desenho em `docs/plataforma-ml.md`. Os modelos vivem em outro repositório (`models`) e falam com a plataforma pelo contrato.
 
 ## Fronteira (nunca cruzar sem combinar)
 
-- Este repo cuida de "o job rodou?". O repo `modelos` cuida de "o modelo está certo?".
+- Este repo cuida de "o job rodou?". O repo `models` cuida de "o modelo está certo?".
 - O único ponto de passagem é o alias `champion` no MLflow. Trocar o alias é o deploy de um modelo.
 - Mudança em `raw` ou `ref` exige migração Alembic + ADR + aviso à ciência de dados. Mudança na assinatura de `build_features`, `predict` e `evaluate` exige ADR. Mudança que publica porta ou expõe serviço fora do tailnet/loopback também exige ADR.
 
@@ -17,12 +17,13 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
 ## Regras de código
 
 - Todo job de ingestão é idempotente: upsert por chave primária (`INSERT ... ON CONFLICT DO UPDATE`), nunca append cego.
-- Toda linha em `raw` leva `ingerido_em`.
+- Toda linha em `raw` leva `ingested_at`.
 - Todo job termina com checagem de qualidade (pandera). Checagem falha = execução falha.
 - Nenhum segredo no git. Segredos entram por variável de ambiente.
 - O deny de `Read` não impede leitura via Bash (`cat .env`); portanto agentes nunca devem ler arquivos `.env`, com nenhuma ferramenta. O deny também bloqueia `.env.example`; se um agente precisar das variáveis documentadas, o usuário cola o conteúdo.
 - TDD estrito: todo código de produção nasce de um teste vermelho. Ciclo: vermelho (test-writer) → implementação mínima → verde → refatorar com a suíte verde. Sem teste vermelho antes, sem código. Exceção: refatoração com a suíte já verde não exige teste vermelho novo.
 - Merge na `main` é a única forma de mudar produção.
+- Identificadores e artefatos de implementação em inglês: código, variáveis, funções, classes, módulos e nomes de arquivo de código, schemas, tabelas, colunas, papéis do Postgres, jobs, flows, subcomandos e flags de CLI, variáveis de ambiente, serviços, imagens, painéis, nomes de modelo, branches, comentários, mensagens de log e de erro do código, mensagens de commit e títulos e corpos de PR. A prosa de `docs/` (planos, guias, ADRs) continua em português. Tabela de nomes e regras de formação: `docs/adr/0001-english-naming-convention.md`.
 
 ## Comandos
 
