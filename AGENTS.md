@@ -37,6 +37,7 @@ Ainda não há código. Quando o ambiente de desenvolvimento existir, liste aqui
   3. `task-implementer` implementa em worktree partindo da branch com os testes, sem editar testes.
   4. `code-reviewer` revisa antes do PR.
   5. Abrir o PR (o CI roda no PR).
-  6. CI + `pr-reviewer`, que revisa o PR contra o plano.
+  6. CI + `pr-reviewer`, que revisa o PR contra o plano (dispensado em PR só de `docs/**`, ver abaixo).
+- PR que altera somente `docs/**` (planos, ADRs, guias) dispensa o pr-reviewer: o usuário revisa se quiser e o merge pode ser feito sem revisão de agente. Qualquer PR que toque `.claude/`, `AGENTS.md`, `CLAUDE.md`, código, infra ou CI continua passando pelo code-reviewer e pelo pr-reviewer, mesmo quando só há Markdown, porque esses arquivos mudam o comportamento dos agentes ou do deploy.
 - Uma fase do roadmap por vez. Não adiante itens de fases futuras.
 - Dê evidência de que funciona: o comando rodado e a saída, não só "deve funcionar".
