@@ -23,7 +23,7 @@ Fase 1 — "Postgres, migrações com Alembic, usuários e permissões" (parte "
 | Caminho | Motivo |
 | --- | --- |
 | `infra/docker-compose.yml` | Serviço `postgres` e volume `pgdata` |
-| `infra/.env.example` | `POSTGRES_ADMIN_USUARIO`, `POSTGRES_ADMIN_SENHA`, `POSTGRES_BIND_IP` (valores fictícios) |
+| `infra/.env.example` | `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BIND_IP` (valores fictícios) |
 | `tests/infra/test_compose.py` | Casos novos para o serviço `postgres` de produção (test-writer) |
 | `.github/workflows/ci.yml` | Smoke test: subir o `postgres` do compose de produção e esperar `healthy` |
 
@@ -38,12 +38,12 @@ Atenção (está no item 02): porta publicada pelo Docker passa por cima do ufw.
    - `image: postgres:16.<minor>` (mesma minor do compose de dev, PR 05)
    - `restart: unless-stopped`
    - `mem_limit: 256m` (estimativa de 100–250 MB, a medir no checkpoint 28a)
-   - `environment`: `POSTGRES_USER: ${POSTGRES_ADMIN_USUARIO}`, `POSTGRES_PASSWORD: ${POSTGRES_ADMIN_SENHA}`, `POSTGRES_DB: ml`
+   - `environment`: `POSTGRES_USER: ${POSTGRES_ADMIN_USER}`, `POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}`, `POSTGRES_DB: ml`
    - `volumes: [pgdata:/var/lib/postgresql/data]`
    - `ports: ["${POSTGRES_BIND_IP}:5432:5432"]`
-   - `healthcheck`: `pg_isready -U ${POSTGRES_ADMIN_USUARIO} -d ml`, intervalo 10s, 5 tentativas
+   - `healthcheck`: `pg_isready -U ${POSTGRES_ADMIN_USER} -d ml`, intervalo 10s, 5 tentativas
    - Volume nomeado `pgdata`.
-3. Em `infra/.env.example`: `POSTGRES_ADMIN_USUARIO=plataforma_admin`, `POSTGRES_ADMIN_SENHA=troque-me`, `POSTGRES_BIND_IP=127.0.0.1`, com comentário: "na VPS, use o IP do Tailscale (`tailscale ip -4`, faixa 100.64.0.0/10) ou mantenha 127.0.0.1 se a P15 escolher `tailscale serve --tcp=5432`; nunca 0.0.0.0".
+3. Em `infra/.env.example`: `POSTGRES_ADMIN_USER=platform_admin`, `POSTGRES_ADMIN_PASSWORD=troque-me`, `POSTGRES_BIND_IP=127.0.0.1`, com comentário: "na VPS, use o IP do Tailscale (`tailscale ip -4`, faixa 100.64.0.0/10) ou mantenha 127.0.0.1 se a P15 escolher `tailscale serve --tcp=5432`; nunca 0.0.0.0".
 4. No `ci.yml`, novo passo depois dos testes: `docker compose -f infra/docker-compose.yml --env-file infra/.env.example up -d --wait postgres` e depois `docker compose -f infra/docker-compose.yml --env-file infra/.env.example down -v`. Atenção à porta 5432 já usada pelo service container do CI: no passo, sobrescreva com `POSTGRES_BIND_IP=127.0.0.2` (o loopback inteiro responde no Linux) ou rode o smoke num job separado sem service container. Escolha a segunda se a primeira conflitar.
 5. Rode os critérios de pronto.
 
@@ -54,7 +54,7 @@ Atenção (está no item 02): porta publicada pelo Docker passa por cima do ufw.
 | `uv run pytest tests/infra/test_compose.py` | Todos passam |
 | `docker compose -f infra/docker-compose.yml --env-file infra/.env.example config -q` | Sem saída, código 0 |
 | `docker compose -f infra/docker-compose.yml --env-file infra/.env.example up -d --wait postgres` (localmente, com o compose de dev parado) | `Container plataforma-postgres-1  Healthy` |
-| `docker compose -f infra/docker-compose.yml --env-file infra/.env.example exec postgres psql -U plataforma_admin -d ml -c "select 1"` | Uma linha com `1` |
+| `docker compose -f infra/docker-compose.yml --env-file infra/.env.example exec postgres psql -U platform_admin -d ml -c "select 1"` | Uma linha com `1` |
 | `uv run pytest` | Suíte verde |
 | `gh pr checks` | Verde, com o passo de smoke do compose |
 

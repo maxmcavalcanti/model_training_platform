@@ -1,12 +1,12 @@
-# 19 — Tabela `ref.calendario` e carga com a lib `holidays`
+# 19 — Tabela `ref.calendar` e carga com a lib `holidays`
 
-> Executa: agente. Depende de: 11, 15 (usa `ingestion/checks.py`). Branch sugerida: `feat/ref-calendario`.
+> Executa: agente. Depende de: 11, 15 (usa `ingestion/checks.py`). Branch sugerida: `feat/ref-calendar`.
 > Pré-requisito: ADR "Contrato de dados v1" (PR 09).
 > TDD: test-writer (vermelho) → implementação (verde) → refatorar.
 
 ## 1. Objetivo
 
-Criar `ref.calendario` (um dia por linha, com dia da semana e feriado nacional) e o subcomando `python -m ingestion calendario --inicio --fim` que a preenche de forma idempotente.
+Criar `ref.calendar` (um dia por linha, com dia da semana e feriado nacional) e o subcomando `python -m ingestion calendario --start --end` que a preenche de forma idempotente.
 Migração e carga ficam juntas porque são pequenas (~200 linhas) e uma não tem uso sem a outra.
 
 ## 2. Fora do escopo
@@ -16,41 +16,41 @@ Migração e carga ficam juntas porque são pequenas (~200 linhas) e uma não te
 
 ## 3. Fase do roadmap
 
-Fase 1 — "`ref.locais`, `ref.calendario`".
+Fase 1 — "`ref.locations`, `ref.calendar`".
 
 ## 4. Arquivos a criar ou alterar
 
 | Caminho | Motivo |
 | --- | --- |
 | `pyproject.toml`, `uv.lock` | `holidays` |
-| `migrations/versions/0005_ref_calendario.py` | Tabela; `downgrade` a remove |
-| `ingestion/calendario.py` | `montar_calendario(inicio, fim) -> pd.DataFrame` (puro) |
-| `ingestion/checks.py` | `SCHEMA_CALENDARIO` |
-| `ingestion/jobs.py` | `carregar_calendario(engine, inicio, fim)` |
+| `migrations/versions/0005_ref_calendar.py` | Tabela; `downgrade` a remove |
+| `ingestion/calendar_ref.py` | `build_calendar(inicio, fim) -> pd.DataFrame` (puro) |
+| `ingestion/checks.py` | `SCHEMA_CALENDAR` |
+| `ingestion/jobs.py` | `load_calendar(engine, inicio, fim)` |
 | `ingestion/cli.py` | Subcomando `calendario` |
-| `tests/test_calendario.py` | Testes (test-writer) |
+| `tests/test_calendar.py` | Testes (test-writer) |
 
-Modelo de dados (`docs/plataforma-ml.md`): `ref.calendario` — `data`, `dia_semana`, `feriado_nacional`, `nome_feriado`; chave `data`; escreve Plataforma (lib `holidays`); lê Todos.
+Modelo de dados (`docs/plataforma-ml.md`): `ref.calendar` — `data`, `weekday`, `is_national_holiday`, `holiday_name`; chave `data`; escreve Plataforma (lib `holidays`); lê Todos.
 
-Código existente: `ingestion/db.py` (`upsert`), `ingestion/checks.py` (`checar`, `ChecagemFalhou`), `ingestion/cli.py` (`SUBCOMANDOS`).
+Código existente: `ingestion/db.py` (`upsert`), `ingestion/checks.py` (`checar`, `CheckFailed`), `ingestion/cli.py` (`SUBCOMMANDS`).
 
 ## 5. Passos
 
-1. (test-writer) Escreva `tests/test_calendario.py` com os casos da seção 8 (os de banco com `@pytest.mark.db`). Confirme falha por `ModuleNotFoundError: ingestion.calendario`. Commit `test: add ref.calendario tests`.
+1. (test-writer) Escreva `tests/test_calendar.py` com os casos da seção 8 (os de banco com `@pytest.mark.db`). Confirme falha por `ModuleNotFoundError: ingestion.calendario`. Commit `test: add ref.calendar tests`.
 2. (implementer) `uv add holidays`.
-3. Migração `0005`: `ref.calendario (data date primary key, dia_semana smallint not null check (dia_semana between 1 and 7), feriado_nacional boolean not null, nome_feriado text, check (feriado_nacional = (nome_feriado is not null)))`. `dia_semana` segue ISO: 1 = segunda, 7 = domingo.
-4. `ingestion/calendario.py`: `montar_calendario(inicio: date, fim: date) -> pd.DataFrame` com uma linha por dia (inclusive nas duas pontas), usando `holidays.country_holidays("BR", years=...)` só com feriados nacionais. `inicio > fim` → `ValueError`.
-5. `SCHEMA_CALENDARIO` em `checks.py`: `data` única e não nula, `dia_semana` em 1..7, regra feriado ↔ nome.
-6. `ingestion/jobs.py`: `carregar_calendario(engine, inicio, fim)`: monta, faz `upsert(..., "ref.calendario", chaves=["data"], ao_conflitar="atualizar", carimbar_ingerido_em=False)` (`ref` não tem `ingerido_em`), relê o intervalo e `checar(..., linhas_esperadas=(fim - inicio).days + 1)`.
-7. CLI `calendario --inicio AAAA-MM-DD --fim AAAA-MM-DD` (ambos obrigatórios; data inválida → código 2).
+3. Migração `0005`: `ref.calendar (data date primary key, weekday smallint not null check (weekday between 1 and 7), is_national_holiday boolean not null, holiday_name text, check (is_national_holiday = (holiday_name is not null)))`. `weekday` segue ISO: 1 = segunda, 7 = domingo.
+4. `ingestion/calendar_ref.py`: `build_calendar(inicio: date, fim: date) -> pd.DataFrame` com uma linha por dia (inclusive nas duas pontas), usando `holidays.country_holidays("BR", years=...)` só com feriados nacionais. `inicio > fim` → `ValueError`.
+5. `SCHEMA_CALENDAR` em `checks.py`: `data` única e não nula, `weekday` em 1..7, regra feriado ↔ nome.
+6. `ingestion/jobs.py`: `load_calendar(engine, inicio, fim)`: monta, faz `upsert(..., "ref.calendar", chaves=["data"], on_conflict="atualizar", stamp_ingested_at=False)` (`ref` não tem `ingested_at`), relê o intervalo e `checar(..., expected_rows=(fim - inicio).days + 1)`.
+7. CLI `calendario --start AAAA-MM-DD --end AAAA-MM-DD` (ambos obrigatórios; data inválida → código 2).
 8. Rode os critérios de pronto.
 
 ## 6. Critérios de pronto
 
 | Comando | Saída esperada |
 | --- | --- |
-| `uv run pytest tests/test_calendario.py tests/test_migracoes.py` | Todos passam |
-| `uv run python -m ingestion calendario --help` | Mostra `--inicio` e `--fim` |
+| `uv run pytest tests/test_calendar.py tests/test_migrations.py` | Todos passam |
+| `uv run python -m ingestion calendario --help` | Mostra `--start` e `--end` |
 | `uv run alembic heads` | `0005 (head)` |
 | `uv run pytest` | Suíte verde |
 | `gh pr checks` | Verde |
@@ -61,16 +61,16 @@ Código existente: `ingestion/db.py` (`upsert`), `ingestion/checks.py` (`checar`
 
 ## 8. Casos de teste
 
-1. `montar_calendario(2026-01-01, 2026-12-31)` → 365 linhas, datas únicas e contínuas.
-2. 2026-01-01 → `feriado_nacional = True`, `nome_feriado` não vazio, `dia_semana = 4` (quinta).
-3. 2026-11-15 (Proclamação da República, domingo) → feriado, `dia_semana = 7`.
+1. `build_calendar(2026-01-01, 2026-12-31)` → 365 linhas, datas únicas e contínuas.
+2. 2026-01-01 → `is_national_holiday = True`, `holiday_name` não vazio, `weekday = 4` (quinta).
+3. 2026-11-15 (Proclamação da República, domingo) → feriado, `weekday = 7`.
 4. 2026-11-20 (Dia Nacional de Zumbi e da Consciência Negra, feriado nacional desde 2024) → feriado.
-5. 2026-11-09 (segunda comum) → `feriado_nacional = False`, `nome_feriado` nulo, `dia_semana = 1`.
+5. 2026-11-09 (segunda comum) → `is_national_holiday = False`, `holiday_name` nulo, `weekday = 1`.
 6. `inicio > fim` → `ValueError`.
-7. Ano bissexto: `montar_calendario(2024-01-01, 2024-12-31)` → 366 linhas.
-8. (`db`) `carregar_calendario` 2015-01-01 a 2030-12-31 → 5844 linhas; rodar de novo → continua 5844.
-9. (`db`) Inserir `feriado_nacional = true` com `nome_feriado` nulo direto no banco → violação de `CHECK`.
-10. CLI com `--inicio 2026-13-01` → código 2.
+7. Ano bissexto: `build_calendar(2024-01-01, 2024-12-31)` → 366 linhas.
+8. (`db`) `load_calendar` 2015-01-01 a 2030-12-31 → 5844 linhas; rodar de novo → continua 5844.
+9. (`db`) Inserir `is_national_holiday = true` com `holiday_name` nulo direto no banco → violação de `CHECK`.
+10. CLI com `--start 2026-13-01` → código 2.
 
 ## 9. Riscos e perguntas em aberto
 

@@ -33,8 +33,8 @@ Uma VPS com usuário não-root, Docker, swap, firewall fechado e Tailscale, pron
   1. Início: `sudo ufw default deny incoming`, `sudo ufw allow 22/tcp`, `sudo ufw allow in on tailscale0`, `sudo ufw enable`.
   2. Fechar a 22 pública: do notebook, confirme que `ssh deploy@<nome-tailscale>` entra pela tailnet; só então `sudo ufw delete allow 22/tcp`. Se você se trancar fora, use o console web do provedor.
 - [ ] Atenção: portas publicadas pelo Docker com `ports:` **passam por cima do ufw**. Por isso os PRs de compose nunca publicam porta em `0.0.0.0`; só em `127.0.0.1` ou no IP do Tailscale (testes do PR 03).
-- [ ] Clonar o repositório (público, sem token) em `/opt/plataforma` (dono: `deploy`).
-- [ ] Criar `/opt/plataforma/infra/.env` vazio com `chmod 600` (será preenchido nos itens 04 e 12). Nunca commitar.
+- [ ] Clonar o repositório (público, sem token) em `/opt/platform` (dono: `deploy`).
+- [ ] Criar `/opt/platform/infra/.env` vazio com `chmod 600` (será preenchido nos itens 04 e 12). Nunca commitar.
 - [ ] Anotar e guardar fora do git: IP público, nome da máquina no Tailscale, IP do Tailscale (`tailscale ip -4`).
 
 ## Verificação de pronto
@@ -52,7 +52,7 @@ Rodar na VPS, como `deploy`:
 | `free -m` | Linha `Mem:` com total perto de `960`–`1000`; linha `Swap:` com total perto de `2047` |
 | `swapon --show` | `/swapfile` com `2G` |
 | `sudo ufw status verbose` | `Status: active`, `Default: deny (incoming)` e só `Anywhere on tailscale0` (depois da etapa 2) |
-| `stat -c '%a' /opt/plataforma/infra/.env` | `600` |
+| `stat -c '%a' /opt/platform/infra/.env` | `600` |
 
 Do notebook: `ssh deploy@<nome-tailscale>` entra sem senha. De fora da tailnet (celular no 4G): `nc -zv -w 5 <ip-publico> 22` falha.
 

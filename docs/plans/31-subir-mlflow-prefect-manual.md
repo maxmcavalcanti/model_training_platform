@@ -5,13 +5,13 @@
 
 ## Checklist
 
-- [ ] Gerar senhas para `MLFLOW_DB_SENHA` e `PREFECT_DB_SENHA` (ex.: `openssl rand -base64 24`). Guardar no gerenciador de senhas.
-- [ ] Na VPS, em `/opt/plataforma`: `git pull`; acrescentar ao `infra/.env` as variáveis novas de `infra/.env.example`; conferir `TS_HOSTNAME` e `chmod 600`.
+- [ ] Gerar senhas para `MLFLOW_DB_PASSWORD` e `PREFECT_DB_PASSWORD` (ex.: `openssl rand -base64 24`). Guardar no gerenciador de senhas.
+- [ ] Na VPS, em `/opt/platform`: `git pull`; acrescentar ao `infra/.env` as variáveis novas de `infra/.env.example`; conferir `TS_HOSTNAME` e `chmod 600`.
 - [ ] `docker compose -f infra/docker-compose.yml build jobs mlflow`.
-- [ ] `docker compose -f infra/docker-compose.yml run --rm jobs python -m ingestion criar-bancos; echo $?` → `0`.
+- [ ] `docker compose -f infra/docker-compose.yml run --rm jobs python -m ingestion create-databases; echo $?` → `0`.
 - [ ] `docker compose -f infra/docker-compose.yml up -d mlflow prefect-server`.
 - [ ] `infra/scripts/tailscale-serve.sh`; `tailscale serve status` lista as portas 8080, 5000 e 4200.
-- [ ] ACL do Tailscale: liberar para a cientista `tag:plataforma:5432,5000,4200` (Grafana, 3000, entra no item 50). Nada além disso.
+- [ ] ACL do Tailscale: liberar para a cientista `tag:platform:5432,5000,4200` (Grafana, 3000, entra no item 50). Nada além disso.
 - [ ] Enviar à cientista: `MLFLOW_TRACKING_URI=https://<host>.ts.net:5000` e a URL da UI do Prefect `https://<host>.ts.net:4200`. Não há senha de proxy; o acesso é estar na tailnet.
 
 ## Verificação de pronto

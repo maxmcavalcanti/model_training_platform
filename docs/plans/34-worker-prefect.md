@@ -33,7 +33,7 @@ Código existente: `flows/deployments.py` (`POOL = "plataforma"`, `registrar()`,
    - Mesmo `build` do `jobs`; `command: ["prefect", "worker", "start", "--pool", "plataforma", "--type", "process"]`; `restart: unless-stopped`; `mem_limit: 384m` (parte do worker na estimativa de 500–800 MB de server + worker; os flows rodam como subprocesso dentro deste container, então o limite cobre o pico do job com pandas; ajuste pelo 28a); sem `ports`; `depends_on: prefect-server` saudável e `postgres` saudável.
    - `environment`: o mesmo do `jobs` (`DATABASE_URL` com `ingestor`), mais `PREFECT_API_URL: http://prefect-server:4200/api`.
 3. No serviço `jobs`, acrescente `PREFECT_API_URL: http://prefect-server:4200/api`, para registrar deployments com `docker compose run --rm jobs python -m flows.deployments`.
-4. `ci.yml`, no smoke: subir `postgres`, `prefect-server`, `prefect-worker`; `run --rm jobs python -m flows.deployments`; disparar `run --rm jobs prefect deployment run ingest_ons_carga/producao --param dias=1` não serve (precisa de rede e banco migrado); em vez disso, confira só que o worker aparece: `run --rm jobs prefect work-pool inspect plataforma` contém `plataforma` e, nos logs do worker, `Worker ... started`.
+4. `ci.yml`, no smoke: subir `postgres`, `prefect-server`, `prefect-worker`; `run --rm jobs python -m flows.deployments`; disparar `run --rm jobs prefect deployment run ingest_ons_load/producao --param dias=1` não serve (precisa de rede e banco migrado); em vez disso, confira só que o worker aparece: `run --rm jobs prefect work-pool inspect plataforma` contém `plataforma` e, nos logs do worker, `Worker ... started`.
 5. Rode os critérios de pronto.
 
 ## 6. Critérios de pronto

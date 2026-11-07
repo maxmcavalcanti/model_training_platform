@@ -26,7 +26,7 @@ Soma das estimativas da Fase 3 em diante: cerca de 1,2 a 2,2 GB, acima de 1 GB. 
 Na VPS, com a stack da Fase 2 no ar:
 
 - [ ] Em repouso (fora dos horários dos jobs): `free -m` e `docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}'`. Anotar.
-- [ ] No pico: durante um job de ingestão (ex.: às 06:30, ou disparando um backfill curto com `docker compose -f infra/docker-compose.yml run --rm jobs python -m ingestion ons-carga --inicio <data> --fim <data>`), rodar em outro terminal `docker stats --no-stream` e `free -m` algumas vezes. Anotar o maior uso.
+- [ ] No pico: durante um job de ingestão (ex.: às 06:30, ou disparando um backfill curto com `docker compose -f infra/docker-compose.yml run --rm jobs python -m ingestion ons-load --start <data> --end <data>`), rodar em outro terminal `docker stats --no-stream` e `free -m` algumas vezes. Anotar o maior uso.
 - [ ] Swap ao longo do tempo: `vmstat 5 12` em repouso (colunas `si`/`so`) e `free -m` (linha `Swap:`, coluna `used`) em dois dias diferentes.
 - [ ] Processos mortos por falta de memória: `sudo dmesg -T | grep -i -E 'out of memory|killed process'` e `docker inspect -f '{{.Name}} {{.State.OOMKilled}}' $(docker ps -aq)`.
 - [ ] Disco (25 GB; as imagens do MLflow e do Prefect são grandes): `df -h /` e `docker system df`. Se passar de 60%, `docker image prune -a` das imagens sem uso antes do PR 29.

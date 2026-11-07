@@ -1,6 +1,6 @@
 # 28 — Bancos e usuários `mlflow` e `prefect` no Postgres
 
-> Executa: agente. Depende de: 11. Branch sugerida: `feat/bancos-mlflow-prefect`.
+> Executa: agente. Depende de: 11. Branch sugerida: `feat/mlflow-prefect-databases`.
 > TDD: test-writer (vermelho) → implementação (verde) → refatorar.
 
 ## 1. Objetivo
@@ -21,10 +21,10 @@ Fase 3 — "MLflow e Prefect no compose" (pré-requisito). O doc diz "atrás do 
 
 | Caminho | Motivo |
 | --- | --- |
-| `ingestion/admin.py` | `garantir_banco(url_admin, nome, senha)` |
-| `ingestion/cli.py` | Subcomando `criar-bancos` que lê `MLFLOW_DB_SENHA` e `PREFECT_DB_SENHA` e chama `garantir_banco` para `mlflow` e `prefect` |
-| `infra/.env.example` | `MLFLOW_DB_SENHA`, `PREFECT_DB_SENHA` (fictícias) |
-| `tests/test_admin_bancos.py` | Testes (test-writer) |
+| `ingestion/admin.py` | `ensure_database(admin_url, nome, senha)` |
+| `ingestion/cli.py` | Subcomando `create-databases` que lê `MLFLOW_DB_PASSWORD` e `PREFECT_DB_PASSWORD` e chama `ensure_database` para `mlflow` e `prefect` |
+| `infra/.env.example` | `MLFLOW_DB_PASSWORD`, `PREFECT_DB_PASSWORD` (fictícias) |
+| `tests/test_admin_databases.py` | Testes (test-writer) |
 
 Do doc (`docs/plataforma-ml.md`, "Stack na VPS"): "PostgreSQL 16 — também é backend do MLflow e do Prefect — Um banco por serviço (`ml`, `mlflow`, `prefect`)".
 
@@ -32,13 +32,13 @@ Por que não migração Alembic: `CREATE DATABASE` não roda dentro de transaç�
 
 ## 5. Passos
 
-1. (test-writer) Escreva `tests/test_admin_bancos.py` (`@pytest.mark.db`), usando nomes únicos por execução (ex.: `mlflow_t<hex>`) para não colidir no servidor de teste, e apagando banco e papel no teardown. Casos na seção 8. Confirme falha por `ModuleNotFoundError: ingestion.admin`. Commit `test: add database bootstrap tests`.
-2. (implementer) `ingestion/admin.py`, `garantir_banco(url_admin: str, nome: str, senha: str) -> None`, com conexão `AUTOCOMMIT`:
+1. (test-writer) Escreva `tests/test_admin_databases.py` (`@pytest.mark.db`), usando nomes únicos por execução (ex.: `mlflow_t<hex>`) para não colidir no servidor de teste, e apagando banco e papel no teardown. Casos na seção 8. Confirme falha por `ModuleNotFoundError: ingestion.admin`. Commit `test: add database bootstrap tests`.
+2. (implementer) `ingestion/admin.py`, `ensure_database(admin_url: str, nome: str, senha: str) -> None`, com conexão `AUTOCOMMIT`:
    - Valida `nome` com `^[a-z_][a-z0-9_]*$` (vai em SQL como identificador); inválido → `ValueError`.
    - Cria o papel `nome` com `LOGIN PASSWORD` se não existir; se existir, `ALTER ROLE ... PASSWORD` (permite trocar a senha rodando de novo). Senha passada como literal com `quote_literal` do psycopg (`psycopg.sql.Literal`), nunca por f-string.
    - Cria o banco `nome` com `OWNER nome` se não existir.
    - `REVOKE CONNECT ON DATABASE nome FROM PUBLIC`.
-3. CLI `criar-bancos`: usa `DATABASE_URL_ADMIN`; senha ausente → mensagem citando a variável e código 1.
+3. CLI `create-databases`: usa `DATABASE_URL_ADMIN`; senha ausente → mensagem citando a variável e código 1.
 4. `infra/.env.example`: acrescente as duas variáveis.
 5. Rode os critérios de pronto.
 
@@ -46,8 +46,8 @@ Por que não migração Alembic: `CREATE DATABASE` não roda dentro de transaç�
 
 | Comando | Saída esperada |
 | --- | --- |
-| `uv run pytest tests/test_admin_bancos.py` | Todos passam |
-| `uv run python -m ingestion criar-bancos --help` | Uso, código 0 |
+| `uv run pytest tests/test_admin_databases.py` | Todos passam |
+| `uv run python -m ingestion create-databases --help` | Uso, código 0 |
 | `uv run pytest` | Suíte verde |
 | `gh pr checks` | Verde |
 
@@ -57,14 +57,14 @@ Por que não migração Alembic: `CREATE DATABASE` não roda dentro de transaç�
 
 ## 8. Casos de teste
 
-1. Servidor sem o banco → depois de `garantir_banco`, o banco existe e o dono é o papel de mesmo nome.
+1. Servidor sem o banco → depois de `ensure_database`, o banco existe e o dono é o papel de mesmo nome.
 2. Rodar duas vezes → não falha.
 3. Rodar de novo com senha nova → conectar com a senha nova funciona e com a antiga falha.
 4. O papel criado conecta no próprio banco e consegue `CREATE TABLE` nele.
 5. O papel criado **não** conecta no banco `ml` (de teste) nem no banco do outro serviço.
 6. `nome = "x; drop"` → `ValueError`, nada executado.
 7. Senha com aspas simples (`a'b`) funciona.
-8. CLI sem `PREFECT_DB_SENHA` → código 1 e stderr contém `PREFECT_DB_SENHA`.
+8. CLI sem `PREFECT_DB_PASSWORD` → código 1 e stderr contém `PREFECT_DB_PASSWORD`.
 
 ## 9. Riscos e perguntas em aberto
 

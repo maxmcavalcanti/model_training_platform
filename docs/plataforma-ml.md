@@ -82,9 +82,9 @@ plataforma/
 ```
 modelos/
 ├── notebooks/            # exploração; nunca importados por produção
-├── src/modelos/
-│   ├── carga_d1/         # features.py, train.py, predict.py, evaluate.py
-│   └── chuva_d1/
+├── src/models/
+│   ├── load_d1/         # features.py, train.py, predict.py, evaluate.py
+│   └── rain_d1/
 ├── tests/
 ├── pyproject.toml        # pacote instalável, dependências fixadas
 └── .github/workflows/ci.yml
@@ -98,16 +98,16 @@ Um schema por responsabilidade no banco `ml`; as permissões seguem a mesma divi
 
 | Tabela | Colunas principais | Chave | Escreve | Lê |
 | --- | --- | --- | --- | --- |
-| `ref.locais` | `local_id`, `nome`, `lat`, `lon`, `subsistema` | `local_id` | Plataforma | Todos |
-| `ref.calendario` | `data`, `dia_semana`, `feriado_nacional`, `nome_feriado` | `data` | Plataforma (lib `holidays`) | Todos |
-| `raw.ons_carga_diaria` | `subsistema`, `data`, `carga_mwmed`, `ingerido_em` | (`subsistema`, `data`) | Plataforma | Todos |
-| `raw.clima_observado` | `local_id`, `data`, `temp_max`, `temp_min`, `precip_mm`, `vento_max`, `umidade_media`, `ingerido_em` | (`local_id`, `data`) | Plataforma | Todos |
-| `raw.clima_previsao` | `local_id`, `emitida_em`, `data_alvo`, `horizonte_dias`, mesmas variáveis, `ingerido_em` | (`local_id`, `emitida_em`, `data_alvo`) | Plataforma | Todos |
+| `ref.locations` | `location_id`, `nome`, `lat`, `lon`, `subsistema` | `location_id` | Plataforma | Todos |
+| `ref.calendar` | `data`, `weekday`, `is_national_holiday`, `holiday_name` | `data` | Plataforma (lib `holidays`) | Todos |
+| `raw.ons_daily_load` | `subsistema`, `data`, `load_avg_mw`, `ingested_at` | (`subsistema`, `data`) | Plataforma | Todos |
+| `raw.weather_observed` | `location_id`, `data`, `temp_max`, `temp_min`, `precip_mm`, `wind_speed_max`, `humidity_mean`, `ingested_at` | (`location_id`, `data`) | Plataforma | Todos |
+| `raw.weather_forecast` | `location_id`, `issued_at`, `target_date`, `horizon_days`, mesmas variáveis, `ingested_at` | (`location_id`, `issued_at`, `target_date`) | Plataforma | Todos |
 | `features.*` | Definidas por ela | Definidas por ela | Ciência de dados | Todos |
-| `predictions.previsoes` | `modelo`, `versao_modelo`, `chave`, `data_alvo`, `valor_previsto`, `gerado_em` | (`modelo`, `chave`, `data_alvo`, `gerado_em`) | Job de score | Todos |
-| `monitoring.metricas` | `modelo`, `versao_modelo`, `data`, `metrica`, `valor` | (`modelo`, `data`, `metrica`) | Job de monitoramento | Todos |
+| `predictions.model_predictions` | `modelo`, `model_version`, `chave`, `target_date`, `predicted_value`, `generated_at` | (`modelo`, `chave`, `target_date`, `generated_at`) | Job de score | Todos |
+| `monitoring.model_metrics` | `modelo`, `model_version`, `data`, `metrica`, `valor` | (`modelo`, `data`, `metrica`) | Job de monitoramento | Todos |
 
-`chave` é o que o modelo prevê: o subsistema no modelo de carga, o `local_id` no de chuva. Assim uma única tabela de previsões serve a todos os modelos.
+`chave` é o que o modelo prevê: o subsistema no modelo de carga, o `location_id` no de chuva. Assim uma única tabela de previsões serve a todos os modelos.
 
 **Usuários do Postgres:** `ingestor` (escreve `raw` e `ref`), `cientista` (lê tudo, escreve `features`), `scorer` (escreve `predictions` e `monitoring`), `leitura` (Grafana).
 
@@ -117,18 +117,18 @@ Cada job é idempotente e reprocessável por data: rodar duas vezes o mesmo dia 
 
 | Horário (BRT) | Job | O que faz |
 | --- | --- | --- |
-| 06:30 | `ingest_clima_previsao` | Snapshot da previsão para os próximos 7 dias, um registro por local e data-alvo, com `emitida_em` = hoje |
-| 06:45 | `ingest_clima_observado` | Upsert dos últimos 10 dias de clima observado (cobre atraso e correções da fonte) |
-| 07:00 | `ingest_ons_carga` | Lê o parquet do ano corrente no S3 e faz upsert dos últimos 30 dias (cobre revisões do ONS) |
-| 07:30 | `score_modelos` | Para cada modelo com `champion`, gera previsões do dia (ver Contrato) |
-| 08:00 | `monitorar_modelos` | Junta previsões antigas com o real que chegou e grava métricas |
+| 06:30 | `ingest_weather_forecast` | Snapshot da previsão para os próximos 7 dias, um registro por local e data-alvo, com `issued_at` = hoje |
+| 06:45 | `ingest_weather_observed` | Upsert dos últimos 10 dias de clima observado (cobre atraso e correções da fonte) |
+| 07:00 | `ingest_ons_load` | Lê o parquet do ano corrente no S3 e faz upsert dos últimos 30 dias (cobre revisões do ONS) |
+| 07:30 | `score_models` | Para cada modelo com `champion`, gera previsões do dia (ver Contrato) |
+| 08:00 | `monitor_models` | Junta previsões antigas com o real que chegou e grava métricas |
 
 Os horários são um ponto de partida; ajustar depois de verificar quando o ONS publica.
 
 **Regras de todos os jobs:**
 
 - Upsert por chave primária (`INSERT … ON CONFLICT DO UPDATE`), nunca `append` cego
-- Coluna `ingerido_em` em toda linha, para saber quando cada dado entrou
+- Coluna `ingested_at` em toda linha, para saber quando cada dado entrou
 - Checagem depois de gravar: linhas esperadas por dia, sem nulos nas colunas-chave, valores dentro de faixas plausíveis (carga positiva, temperatura entre −10 e 50 °C)
 - Falha de checagem = execução falha no Prefect = alerta no Telegram
 - Retry com backoff para erro de rede (3 tentativas)
@@ -139,25 +139,25 @@ Os horários são um ponto de partida; ajustar depois de verificar quando o ONS 
 
 O contrato é o que deixa os dois trabalharem sem depender um do outro no dia a dia: enquanto ele for cumprido, ela troca o modelo inteiro sem me chamar e eu troco a infra sem quebrar o modelo dela.
 
-**O que ela entrega, por modelo** (módulo em `src/modelos/<nome>/`):
+**O que ela entrega, por modelo** (módulo em `src/models/<nome>/`):
 
 ```python
-def build_features(conn, data_ref: date) -> pd.DataFrame: ...
-    # lê raw/ref; só usa dados disponíveis até data_ref (sem vazamento)
+def build_features(conn, ref_date: date) -> pd.DataFrame: ...
+    # lê raw/ref; só usa dados disponíveis até ref_date (sem vazamento)
 
 def predict(model, features: pd.DataFrame) -> pd.DataFrame: ...
-    # devolve colunas: chave, data_alvo, valor_previsto
+    # devolve colunas: chave, target_date, predicted_value
 
 def evaluate(previsto: pd.DataFrame, real: pd.DataFrame) -> dict[str, float]: ...
     # ex.: {"mape": 3.1, "mae": 1520.0}
 ```
 
-O treino (`train.py`) roda onde ela quiser e termina registrando o modelo no MLflow com o nome do módulo (`carga_d1`).
+O treino (`train.py`) roda onde ela quiser e termina registrando o modelo no MLflow com o nome do módulo (`load_d1`).
 
 **O que a plataforma garante:**
 
-1. Todo dia, o job de score busca `models:/<nome>@champion` no MLflow, chama `build_features` → `predict` e grava em `predictions.previsoes`.
-2. O job de monitoramento cruza previsões com o real e grava o retorno de `evaluate` em `monitoring.metricas`.
+1. Todo dia, o job de score busca `models:/<nome>@champion` no MLflow, chama `build_features` → `predict` e grava em `predictions.model_predictions`.
+2. O job de monitoramento cruza previsões com o real e grava o retorno de `evaluate` em `monitoring.model_metrics`.
 3. Trocar o alias `champion` para outra versão é o deploy. Nenhum PR na plataforma, nenhuma ação minha.
 
 **Regras de mudança:** schema de `raw` e `ref` só muda com aviso e migração; a assinatura das três funções só muda se combinarmos. Erro dentro do código dela aparece no Prefect com o traceback, e quem investiga é ela.
@@ -192,14 +192,14 @@ A previsão do tempo entra no ar logo na Fase 2, porque cada dia sem coletar é 
 **Fase 1 — Banco e carga do ONS** → libera a exploração dela
 
 - [ ] Postgres, migrações com Alembic, usuários e permissões
-- [ ] `ref.locais`, `ref.calendario`
+- [ ] `ref.locations`, `ref.calendar`
 - [ ] Ingestão do ONS + backfill desde 2015 + checagens
-- [ ] Pronto quando: ela consulta `raw.ons_carga_diaria` do notebook dela via Tailscale
+- [ ] Pronto quando: ela consulta `raw.ons_daily_load` do notebook dela via Tailscale
 
 **Fase 2 — Clima**
 
-- [ ] `raw.clima_previsao` coletando todo dia (prioridade)
-- [ ] `raw.clima_observado` + backfill desde 2015
+- [ ] `raw.weather_forecast` coletando todo dia (prioridade)
+- [ ] `raw.weather_observed` + backfill desde 2015
 - [ ] Pronto quando: 7 dias seguidos de snapshots sem falha
 
 **Fase 3 — MLflow, Prefect e CI/CD** → libera o treino com registro
@@ -217,6 +217,6 @@ A previsão do tempo entra no ar logo na Fase 2, porque cada dia sem coletar é 
 
 **Fase 5 — Monitoramento e alertas**
 
-- [ ] Job de monitoramento + `monitoring.metricas`
+- [ ] Job de monitoramento + `monitoring.model_metrics`
 - [ ] Alertas no Telegram, backups com restore testado
 - [ ] Pronto quando: o painel mostra erro real × previsto atualizando sozinho

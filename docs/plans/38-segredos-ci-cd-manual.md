@@ -12,15 +12,15 @@ Regra (`.claude/rules/infra.md`): "Segredos do CI vão em GitHub Secrets". Os re
 
 Tailscale (o runner do GitHub entra na tailnet só durante o deploy):
 
-- [ ] Na ACL, criar a tag `tag:ci` e permitir `tag:ci` → `tag:plataforma:22,8080` apenas (22 para o SSH do deploy; 8080 para a checagem final de `/saude` do PR 39).
+- [ ] Na ACL, criar a tag `tag:ci` e permitir `tag:ci` → `tag:platform:22,8080` apenas (22 para o SSH do deploy; 8080 para a checagem final de `/saude` do PR 39).
 - [ ] Criar um OAuth client (Settings → OAuth clients) com escopo para dispositivos efêmeros e a tag `tag:ci`. Guardar `client_id` e `secret`.
 
 VPS:
 
 - [ ] Gerar um par de chaves só para o deploy: `ssh-keygen -t ed25519 -f deploy_ci -C github-actions -N ""`.
-- [ ] Em `~deploy/.ssh/authorized_keys`, adicionar a pública com restrições: `restrict,command="/opt/plataforma/infra/scripts/deploy.sh" ssh-ed25519 AAAA... github-actions` (o script vem no PR 39; até lá a chave não funciona, o que é o esperado).
-- [ ] Conferir a visibilidade dos pacotes no GitHub (perfil → Packages → `plataforma-jobs` e `plataforma-mlflow` → Package settings): **Public**. Pacote do GHCR pode nascer privado mesmo com repo público. Não crie token de leitura nem faça `docker login` na VPS.
-- [ ] Em `infra/.env`: `GHCR_DONO=<dono em minúsculas>`, `IMAGEM_TAG=main`.
+- [ ] Em `~deploy/.ssh/authorized_keys`, adicionar a pública com restrições: `restrict,command="/opt/platform/infra/scripts/deploy.sh" ssh-ed25519 AAAA... github-actions` (o script vem no PR 39; até lá a chave não funciona, o que é o esperado).
+- [ ] Conferir a visibilidade dos pacotes no GitHub (perfil → Packages → `platform-jobs` e `platform-mlflow` → Package settings): **Public**. Pacote do GHCR pode nascer privado mesmo com repo público. Não crie token de leitura nem faça `docker login` na VPS.
+- [ ] Em `infra/.env`: `GHCR_OWNER=<dono em minúsculas>`, `IMAGE_TAG=main`.
 - [ ] Trocar o fluxo manual: `docker compose -f infra/docker-compose.yml pull && docker compose -f infra/docker-compose.yml up -d --remove-orphans` (sem `build`).
 
 GitHub (Settings → Environments → `producao`):
@@ -35,7 +35,7 @@ GitHub (Settings → Environments → `producao`):
 | Comando | Saída esperada |
 | --- | --- |
 | `gh secret list --env producao` | Os cinco nomes acima |
-| Na VPS: `docker logout ghcr.io; docker compose -f infra/docker-compose.yml pull jobs` | Baixa `ghcr.io/<dono>/plataforma-jobs:main` sem login e sem erro de autenticação |
+| Na VPS: `docker logout ghcr.io; docker compose -f infra/docker-compose.yml pull jobs` | Baixa `ghcr.io/<dono>/platform-jobs:main` sem login e sem erro de autenticação |
 | Na VPS: `test -f ~/.docker/config.json && grep -c ghcr.io ~/.docker/config.json` | Vazio ou `0` (nenhuma credencial do GHCR salva) |
 | `gh variable list --env producao` | `TS_HOSTNAME` |
 | Na VPS: `docker compose -f infra/docker-compose.yml up -d --remove-orphans && docker compose -f infra/docker-compose.yml ps` | Todos `Up`, imagens do GHCR |

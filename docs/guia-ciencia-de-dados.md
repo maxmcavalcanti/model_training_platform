@@ -35,17 +35,17 @@ Todas são padrão de mercado e aparecem nas vagas; não use nada além disso no
 | Prefect (só a interface) | Ver se o job do seu modelo rodou e ler o erro | Só leitura |
 | Grafana | Painel de erro do seu modelo | Montar 2 ou 3 gráficos |
 
-**Estrutura de pastas:** o repositório `modelos` é seu e segue o esqueleto do documento da plataforma. Notebook é para explorar; tudo que vai para produção mora em `src/modelos/`.
+**Estrutura de pastas:** o repositório `modelos` é seu e segue o esqueleto do documento da plataforma. Notebook é para explorar; tudo que vai para produção mora em `src/models/`.
 
 ## Os dois modelos
 
 Dois tipos de problema diferentes de propósito: uma regressão de série temporal e uma classificação. São os dois formatos mais comuns em vagas.
 
-|  | `carga_d1` | `chuva_d1` |
+|  | `load_d1` | `rain_d1` |
 | --- | --- | --- |
 | Pergunta | Quanta energia cada subsistema vai consumir amanhã? | Vai chover amanhã nesta cidade? |
 | Tipo | Regressão (série temporal) | Classificação binária |
-| Alvo | `carga_mwmed` do dia D+1, por subsistema (SE/CO, S, NE, N) | 1 se `precip_mm` ≥ 1 em D+1, senão 0, por cidade |
+| Alvo | `load_avg_mw` do dia D+1, por subsistema (SE/CO, S, NE, N) | 1 se `precip_mm` ≥ 1 em D+1, senão 0, por cidade |
 | Métrica principal | MAPE (erro percentual médio) | Brier score (qualidade da probabilidade) |
 | Métricas de apoio | MAE em MWmed | ROC AUC, precisão e recall no limiar escolhido |
 | Baseline a bater | Carga do mesmo dia da semana anterior (D−7) | Frequência de chuva no mês na cidade (climatologia) |
@@ -54,11 +54,11 @@ Dois tipos de problema diferentes de propósito: uma regressão de série tempor
 
 **Por que baseline importa:** um MAPE de 4% não diz nada sozinho. Se "repetir a semana passada" já dá 5%, o seu modelo ganhou um ponto; se dá 3,5%, ele é pior que não fazer nada. Toda apresentação de resultado começa pela comparação com o baseline.
 
-**Uma decisão que é sua (e é ótima para entrevista):** a previsão do tempo só começa a ser guardada agora, então não há histórico dela para treinar. Para usar clima no `carga_d1`, as opções são treinar com o clima observado e servir com a previsão, aceitando a diferença, ou esperar alguns meses de previsões acumuladas. Documente qual escolheu e por quê.
+**Uma decisão que é sua (e é ótima para entrevista):** a previsão do tempo só começa a ser guardada agora, então não há histórico dela para treinar. Para usar clima no `load_d1`, as opções são treinar com o clima observado e servir com a previsão, aceitando a diferença, ou esperar alguns meses de previsões acumuladas. Documente qual escolheu e por quê.
 
 ## Passo a passo
 
-Faça primeiro o `carga_d1` inteiro, até produção, e só depois o `chuva_d1`: um modelo simples no ar ensina mais do que dois modelos ótimos no notebook. Cada etapa termina com um entregável concreto.
+Faça primeiro o `load_d1` inteiro, até produção, e só depois o `rain_d1`: um modelo simples no ar ensina mais do que dois modelos ótimos no notebook. Cada etapa termina com um entregável concreto.
 
 **Etapa 1 — Exploração** (pode começar hoje, com os dados baixados direto das fontes)
 
@@ -81,15 +81,15 @@ Faça primeiro o `carga_d1` inteiro, até produção, e só depois o `chuva_d1`:
 
 **Etapa 4 — Empacotar no contrato**
 
-- [ ] Mover o código para `src/modelos/carga_d1/`: `build_features`, `predict`, `evaluate`, `train`
+- [ ] Mover o código para `src/models/load_d1/`: `build_features`, `predict`, `evaluate`, `train`
 - [ ] Escrever testes: features sem nulos, sem datas futuras, saída com as colunas certas
 - [ ] Entregável: PR aprovado no repositório `modelos`, com CI verde
 
 **Etapa 5 — Ir para produção**
 
-- [ ] Rodar `train.py` e registrar o modelo `carga_d1` no MLflow
+- [ ] Rodar `train.py` e registrar o modelo `load_d1` no MLflow
 - [ ] Marcar a versão com o alias `champion`: a partir daí, o job diário usa o seu modelo
-- [ ] Entregável: previsões aparecendo em `predictions.previsoes` todo dia
+- [ ] Entregável: previsões aparecendo em `predictions.model_predictions` todo dia
 
 **Etapa 6 — Monitorar**
 
@@ -100,7 +100,7 @@ Faça primeiro o `carga_d1` inteiro, até produção, e só depois o `chuva_d1`:
 **Etapa 7 — Documentar**
 
 - [ ] Model card de uma página: objetivo, dados, métrica, resultado contra o baseline, limitações, regra de retreino
-- [ ] Repetir as etapas 2 a 7 para o `chuva_d1`
+- [ ] Repetir as etapas 2 a 7 para o `rain_d1`
 
 ## Armadilhas
 

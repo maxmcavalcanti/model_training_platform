@@ -1,6 +1,6 @@
 # 07 — Usuários do Postgres e permissões por schema
 
-> Executa: agente. Depende de: 06. Branch sugerida: `feat/db-papeis`.
+> Executa: agente. Depende de: 06. Branch sugerida: `feat/db-roles`.
 > TDD: test-writer (vermelho) → implementação (verde) → refatorar.
 
 ## 1. Objetivo
@@ -22,8 +22,8 @@ Fase 1 — "Postgres, migrações com Alembic, usuários e permissões" (parte "
 
 | Caminho | Motivo |
 | --- | --- |
-| `migrations/versions/0002_papeis.py` | Cria papéis (se não existirem) e concede permissões |
-| `tests/test_permissoes.py` | Testes de permissão por papel (test-writer) |
+| `migrations/versions/0002_roles.py` | Cria papéis (se não existirem) e concede permissões |
+| `tests/test_permissions.py` | Testes de permissão por papel (test-writer) |
 
 Regra e modelo de dados (de `.claude/rules/migrations-e-dados.md` e `docs/plataforma-ml.md`):
 
@@ -33,7 +33,7 @@ Na tabela do modelo de dados, a coluna "Lê" é "Todos" para todas as tabelas.
 
 ## 5. Passos
 
-1. (test-writer) Escreva `tests/test_permissoes.py` (`@pytest.mark.db`) usando um banco novo migrado até `head`. No arranjo de cada teste, como usuário admin, crie uma tabela de teste `x (id int primary key)` em cada schema (`raw`, `ref`, `predictions`, `monitoring`) — isso simula uma migração futura. Use `SET ROLE <papel>` para agir como cada papel e `RESET ROLE` depois. Casos na seção 8. Confirme falha porque os papéis não existem. Commit `test: add role permission tests`.
+1. (test-writer) Escreva `tests/test_permissions.py` (`@pytest.mark.db`) usando um banco novo migrado até `head`. No arranjo de cada teste, como usuário admin, crie uma tabela de teste `x (id int primary key)` em cada schema (`raw`, `ref`, `predictions`, `monitoring`) — isso simula uma migração futura. Use `SET ROLE <papel>` para agir como cada papel e `RESET ROLE` depois. Casos na seção 8. Confirme falha porque os papéis não existem. Commit `test: add role permission tests`.
 2. (implementer) `uv run alembic revision -m "papeis" --rev-id 0002`.
 3. `upgrade`:
    - Para cada papel, crie com `LOGIN` se não existir (papéis são globais ao servidor):
@@ -50,8 +50,8 @@ Na tabela do modelo de dados, a coluna "Lê" é "Todos" para todas as tabelas.
 
 | Comando | Saída esperada |
 | --- | --- |
-| `uv run pytest tests/test_permissoes.py` | Todos passam |
-| `uv run pytest tests/test_migracoes.py` | Passa (a ida e volta agora inclui 0002) |
+| `uv run pytest tests/test_permissions.py` | Todos passam |
+| `uv run pytest tests/test_migrations.py` | Passa (a ida e volta agora inclui 0002) |
 | `uv run alembic heads` | `0002 (head)` |
 | `uv run pytest` | Suíte verde |
 | `uv run ruff check .` e `uv run ruff format --check .` | Sem erro |
@@ -69,7 +69,7 @@ Em todos, a tabela `x` foi criada pelo admin **depois** da migração (cobre os 
 2. `ingestor`: `DELETE FROM raw.x` falha com `permission denied`.
 3. `scorer`: `INSERT` em `predictions.x` e `monitoring.x` funciona; `INSERT` em `raw.x` falha.
 4. `leitura`: `SELECT` em `raw.x`, `ref.x`, `predictions.x`, `monitoring.x` funciona; qualquer `INSERT` falha.
-5. `cientista`: `CREATE TABLE features.minha (id int)` funciona; depois disso, `leitura` e `scorer` conseguem `SELECT` em `features.minha`.
+5. `cientista`: `CREATE TABLE features.mine (id int)` funciona; depois disso, `leitura` e `scorer` conseguem `SELECT` em `features.mine`.
 6. `cientista`: `CREATE TABLE raw.y (id int)` falha; `INSERT` em `raw.x` falha.
 7. Nenhum dos quatro papéis consegue `CREATE TABLE` em `raw`, `ref`, `predictions` ou `monitoring`.
 8. Rodar `upgrade head` num segundo banco do mesmo servidor (papéis já existem) não falha.

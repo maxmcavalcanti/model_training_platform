@@ -1,6 +1,6 @@
 # 03 — Compose de produção e rede só Tailscale (`tailscale serve`)
 
-> Executa: agente. Depende de: 01. Branch sugerida: `feat/compose-rede-tailscale`.
+> Executa: agente. Depende de: 01. Branch sugerida: `feat/compose-tailscale-network`.
 > Testes: test-writer primeiro (vermelho), depois implementação (verde), depois refatorar com a suíte verde.
 > Decisão do usuário (2026-11-07, P4 resolvida): rede **só Tailscale**. Sem domínio público, sem proxy com autenticação, sem certificado público. Isso é desvio de `docs/plataforma-ml.md` (que prevê Caddy na stack) e exige o ADR da seção 10 mergeado antes deste PR.
 
@@ -25,7 +25,7 @@ Fase 0 — Base da VPS. O doc diz "Caddy com HTTPS e autenticação"; com a deci
 | Caminho | Motivo |
 | --- | --- |
 | `infra/docker-compose.yml` | Compose de produção; neste PR só o serviço `saude` |
-| `infra/saude/saude` | Arquivo estático com o texto `ok`, servido em `/saude` |
+| `infra/health/health` | Arquivo estático com o texto `ok`, servido em `/saude` |
 | `infra/scripts/tailscale-serve.sh` | Declara, em código, quais portas de loopback viram HTTPS na tailnet. Idempotente |
 | `infra/.env.example` | Lista das variáveis, com valores fictícios. Sem segredo real |
 | `tests/infra/__init__.py`, `tests/infra/test_compose.py`, `tests/infra/test_tailscale_serve.py` | Testes das regras de infra (test-writer) |
@@ -59,14 +59,14 @@ Modelo de acesso (recomendado; a escolha fina é o ADR da seção 10):
 1. (test-writer) Escreva `tests/infra/test_compose.py`, que carrega com `yaml.safe_load` todo arquivo `infra/docker-compose*.yml` e verifica os casos 1 a 8 da seção 8, e `tests/infra/test_tailscale_serve.py` com os casos 9 a 11. As funções de checagem (ex.: "esta porta é aceitável?") são do próprio teste e também são exercitadas com exemplos negativos embutidos (`"0.0.0.0:8080:8080"`, `"8080:8080"`), para provar que a checagem não passa no vazio. Rode `uv run pytest tests/infra/` e confirme que falha porque `infra/docker-compose.yml` não existe. Commit `test: add compose and network policy tests`.
 2. (implementer) Crie `infra/docker-compose.yml`:
    - `name: plataforma`.
-   - Serviço `saude`: imagem `busybox:1.<minor>` (fixe a versão atual conferida em hub.docker.com/_/busybox), `command: ["httpd", "-f", "-p", "8080", "-h", "/www"]`, `volumes: ["./saude:/www:ro"]`, `restart: unless-stopped`, `mem_limit: 16m`, `ports: ["${SAUDE_BIND_IP}:8080:8080"]`, `healthcheck` com `wget -qO- http://localhost:8080/saude`.
-3. Crie `infra/saude/saude` contendo `ok` (uma linha).
+   - Serviço `saude`: imagem `busybox:1.<minor>` (fixe a versão atual conferida em hub.docker.com/_/busybox), `command: ["httpd", "-f", "-p", "8080", "-h", "/www"]`, `volumes: ["./saude:/www:ro"]`, `restart: unless-stopped`, `mem_limit: 16m`, `ports: ["${HEALTH_BIND_IP}:8080:8080"]`, `healthcheck` com `wget -qO- http://localhost:8080/saude`.
+3. Crie `infra/health/health` contendo `ok` (uma linha).
 4. Crie `infra/scripts/tailscale-serve.sh` (`#!/usr/bin/env bash`, `set -euo pipefail`):
    - `tailscale serve reset` e, em seguida, uma linha por UI: `tailscale serve --bg --https=8080 http://127.0.0.1:8080`. Neste PR só a saúde; os PRs 29, 30 e 47 acrescentam uma linha cada.
    - Reset + reaplicar deixa o script declarativo: o estado do `tailscale serve` na VPS é sempre o que está no git.
    - Confira a sintaxe exata contra `tailscale serve --help` da versão estável atual (documentação em tailscale.com/kb/1242/tailscale-serve). Se a sintaxe divergir, ajuste e registre no PR; não invente flags.
    - Nunca use `tailscale funnel` nem `--funnel`.
-5. Crie `infra/.env.example` com `SAUDE_BIND_IP=127.0.0.1` e `TS_HOSTNAME=plataforma.exemplo.ts.net`. Comentário no topo: "copie para infra/.env na VPS, chmod 600; nunca commite o .env; os repos são públicos, um segredo commitado uma vez fica público para sempre e precisa ser trocado. Nenhum *_BIND_IP pode ser 0.0.0.0".
+5. Crie `infra/.env.example` com `HEALTH_BIND_IP=127.0.0.1` e `TS_HOSTNAME=plataforma.exemplo.ts.net`. Comentário no topo: "copie para infra/.env na VPS, chmod 600; nunca commite o .env; os repos são públicos, um segredo commitado uma vez fica público para sempre e precisa ser trocado. Nenhum *_BIND_IP pode ser 0.0.0.0".
 6. No `ci.yml`, adicione ao job existente (o runner `ubuntu-latest` já tem Docker e `shellcheck`):
    - `docker compose -f infra/docker-compose.yml --env-file infra/.env.example config -q`
    - `shellcheck infra/scripts/*.sh`
@@ -81,7 +81,7 @@ Modelo de acesso (recomendado; a escolha fina é o ADR da seção 10):
 | `uv run ruff check .` e `uv run ruff format --check .` | Sem erro |
 | `docker compose -f infra/docker-compose.yml --env-file infra/.env.example config -q` | Sem saída, código 0 |
 | `shellcheck infra/scripts/tailscale-serve.sh` | Sem saída |
-| `docker compose -f infra/docker-compose.yml --env-file infra/.env.example up -d --wait saude` | `Container plataforma-saude-1  Healthy` |
+| `docker compose -f infra/docker-compose.yml --env-file infra/.env.example up -d --wait saude` | `Container platform-health-1  Healthy` |
 | `curl -s http://127.0.0.1:8080/saude` | `ok` |
 | `docker compose -f infra/docker-compose.yml --env-file infra/.env.example ps --format '{{.Ports}}'` | `127.0.0.1:8080->8080/tcp`, sem `0.0.0.0` |
 | `docker compose -f infra/docker-compose.yml --env-file infra/.env.example down` | Remove o container |

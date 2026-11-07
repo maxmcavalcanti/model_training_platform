@@ -26,19 +26,19 @@ Fase 3 — "Pipelines do GitHub Actions"; "Pronto quando: um merge na `main` che
 | `.github/workflows/ci.yml` | Confirmar que o `shellcheck infra/scripts/*.sh` do PR 03 cobre o script novo |
 | `tests/infra/test_deploy_sh.py` | Testes do script com `git`, `docker` e `tailscale` falsos no `PATH` (test-writer) |
 
-Do doc: "SSH na VPS: `alembic upgrade head`, `docker compose pull && up -d`, registra deployments do Prefect". Do item 38: a chave do CI está em `authorized_keys` com `restrict,command="/opt/plataforma/infra/scripts/deploy.sh"`; portanto o argumento chega em `SSH_ORIGINAL_COMMAND`, não em `$1`.
+Do doc: "SSH na VPS: `alembic upgrade head`, `docker compose pull && up -d`, registra deployments do Prefect". Do item 38: a chave do CI está em `authorized_keys` com `restrict,command="/opt/platform/infra/scripts/deploy.sh"`; portanto o argumento chega em `SSH_ORIGINAL_COMMAND`, não em `$1`.
 
 ## 5. Passos
 
-1. (test-writer) `tests/infra/test_deploy_sh.py`: cria num `tmp_path` executáveis falsos `git`, `docker` e `tailscale` que só gravam a linha de comando num arquivo de log (e saem com o código que o teste mandar), põe esse diretório no início do `PATH`, define `PLATAFORMA_DIR=<tmp>` e roda `bash infra/scripts/deploy.sh` com `SSH_ORIGINAL_COMMAND`. Pule no Windows (`skipif(sys.platform == "win32")`). Casos na seção 8. Confirme falha porque o script não existe. Commit `test: add deploy script tests`.
+1. (test-writer) `tests/infra/test_deploy_sh.py`: cria num `tmp_path` executáveis falsos `git`, `docker` e `tailscale` que só gravam a linha de comando num arquivo de log (e saem com o código que o teste mandar), põe esse diretório no início do `PATH`, define `PLATFORM_DIR=<tmp>` e roda `bash infra/scripts/deploy.sh` com `SSH_ORIGINAL_COMMAND`. Pule no Windows (`skipif(sys.platform == "win32")`). Casos na seção 8. Confirme falha porque o script não existe. Commit `test: add deploy script tests`.
 2. (implementer) `infra/scripts/deploy.sh`:
-   - `set -euo pipefail`; `cd "${PLATAFORMA_DIR:-/opt/plataforma}"`.
+   - `set -euo pipefail`; `cd "${PLATFORM_DIR:-/opt/platform}"`.
    - `SHA="${SSH_ORIGINAL_COMMAND:-${1:-}}"`; aceita só `^[0-9a-f]{40}$`; senão sai com 2 e mensagem.
    - `git fetch --quiet origin main` e `git checkout --quiet --detach "$SHA"`.
-   - `export IMAGEM_TAG="$SHA"`; `C="docker compose -f infra/docker-compose.yml"`.
+   - `export IMAGE_TAG="$SHA"`; `C="docker compose -f infra/docker-compose.yml"`.
    - Na ordem: `$C pull`; `$C run --rm jobs alembic upgrade head`; `$C up -d --remove-orphans`; `infra/scripts/tailscale-serve.sh` (PR 03; roda sem sudo porque `deploy` é operador do Tailscale, item 02); `$C run --rm jobs python -m flows.deployments`.
    - Sem `docker login`: as imagens do GHCR são públicas (P2 resolvida).
-   - Grava `IMAGEM_TAG=$SHA` no `infra/.env` (substituindo a linha), para um reboot subir a mesma versão.
+   - Grava `IMAGE_TAG=$SHA` no `infra/.env` (substituindo a linha), para um reboot subir a mesma versão.
    - No fim, imprime `deploy ok <sha>`.
 3. `deploy.yml`, job `deploy`: `needs: imagens`, `environment: producao`, passos `tailscale/github-action` (major atual, com `oauth-client-id`, `oauth-secret`, `tags: tag:ci`), gravar `VPS_SSH_KEY` em arquivo `600` e `VPS_KNOWN_HOSTS` em `~/.ssh/known_hosts`, `ssh -i <arquivo> deploy@${{ secrets.VPS_HOST }} "${{ github.sha }}"`, e checagem final `curl -fsS https://${{ vars.TS_HOSTNAME }}:8080/saude` (o runner está na tailnet pelo `tailscale/github-action`; a ACL do item 38 libera `tag:ci` só para as portas 22 e 8080; `TS_HOSTNAME` é variável do environment, não segredo).
 4. `ci.yml`: o passo `shellcheck infra/scripts/*.sh` já existe desde o PR 03; confirme que pega o `deploy.sh`.
@@ -64,8 +64,8 @@ Do doc: "SSH na VPS: `alembic upgrade head`, `docker compose pull && up -d`, reg
 2. `SSH_ORIGINAL_COMMAND="rm -rf /"` → código 2; nenhum comando `git`/`docker` foi chamado.
 3. SHA curto (`abc123`) → código 2.
 4. `docker` falso falhando no `alembic upgrade head` → código diferente de 0; `up -d` **não** foi chamado.
-5. `IMAGEM_TAG` exportado para os comandos `docker` é o SHA (o `docker` falso registra o ambiente).
-6. `infra/.env` com `IMAGEM_TAG=main` e outras linhas → depois do script, `IMAGEM_TAG=<sha>` e as outras linhas intactas.
+5. `IMAGE_TAG` exportado para os comandos `docker` é o SHA (o `docker` falso registra o ambiente).
+6. `infra/.env` com `IMAGE_TAG=main` e outras linhas → depois do script, `IMAGE_TAG=<sha>` e as outras linhas intactas.
 7. `tailscale` falso falhando → código diferente de 0; `flows.deployments` **não** foi chamado.
 8. Nenhum comando registrado no log contém `docker login`.
 

@@ -14,13 +14,13 @@ Painel admin do Tailscale:
 
 - [ ] DNS → MagicDNS habilitado.
 - [ ] DNS → HTTPS Certificates habilitado (o `tailscale serve` emite o certificado `*.ts.net`).
-- [ ] Access controls (ACL): marcar a VPS com uma tag (ex.: `tag:plataforma`) e permitir os seus dispositivos para `tag:plataforma:22,8080`. A cientista entra no item 12 e o CI no item 38.
+- [ ] Access controls (ACL): marcar a VPS com uma tag (ex.: `tag:platform`) e permitir os seus dispositivos para `tag:platform:22,8080`. A cientista entra no item 12 e o CI no item 38.
 - [ ] Anotar o nome MagicDNS completo da VPS (`<host>.<tailnet>.ts.net`, visto em `tailscale status --json | jq -r .Self.DNSName` na VPS, sem o ponto final).
 
-VPS, como `deploy`, em `/opt/plataforma`:
+VPS, como `deploy`, em `/opt/platform`:
 
 - [ ] `git pull`.
-- [ ] Preencher `infra/.env` a partir de `infra/.env.example`: `SAUDE_BIND_IP=127.0.0.1`, `TS_HOSTNAME=<host>.<tailnet>.ts.net`. Manter `chmod 600`. Nenhum segredo deste arquivo vai para o git (os repos são públicos).
+- [ ] Preencher `infra/.env` a partir de `infra/.env.example`: `HEALTH_BIND_IP=127.0.0.1`, `TS_HOSTNAME=<host>.<tailnet>.ts.net`. Manter `chmod 600`. Nenhum segredo deste arquivo vai para o git (os repos são públicos).
 - [ ] `docker compose -f infra/docker-compose.yml up -d --wait`.
 - [ ] `infra/scripts/tailscale-serve.sh` (roda sem sudo porque `deploy` é operador do Tailscale, item 02).
 - [ ] `tailscale serve status` mostra `https://<host>.ts.net:8080` → `http://127.0.0.1:8080`.
@@ -54,6 +54,6 @@ Teste de reboot (critério da Fase 0):
 
 - [ ] `sudo reboot` na VPS.
 - [ ] Sem entrar na VPS, depois de 2 minutos, do notebook: `curl -s https://<host>.ts.net:8080/saude` devolve `ok` (prova que o Docker, o container e a configuração do `tailscale serve` voltaram sozinhos).
-- [ ] Na VPS: `docker compose -f /opt/plataforma/infra/docker-compose.yml ps` mostra `saude` com `Up (healthy)`; `tailscale serve status` mostra o mapeamento; `swapon --show` mostra o swap de 2 GB.
+- [ ] Na VPS: `docker compose -f /opt/platform/infra/docker-compose.yml ps` mostra `saude` com `Up (healthy)`; `tailscale serve status` mostra o mapeamento; `swapon --show` mostra o swap de 2 GB.
 
 Se o reboot exigir qualquer intervenção (inclusive rodar de novo o `tailscale-serve.sh`), a Fase 0 não está pronta: anote o que foi preciso e devolva para o planejamento.

@@ -12,7 +12,7 @@ A prova exige observar produção. O CI do repositório `modelos` é de outro re
 - [ ] Abrir um PR trivial (ex.: um comentário em `infra/docker-compose.yml`), CI verde, merge.
 - [ ] Sem entrar na VPS: `gh run watch` do `deploy.yml` até `success`.
 - [ ] Conferir do notebook, pela tailnet: `curl -s https://<host>.ts.net:8080/saude` → `ok`; na UI do Prefect (`https://<host>.ts.net:4200`), os deployments continuam com agenda.
-- [ ] Na VPS (só leitura, para conferir): `git -C /opt/plataforma rev-parse HEAD` = SHA do merge; `docker compose -f /opt/plataforma/infra/docker-compose.yml ps --format '{{.Image}}'` mostra `:<sha>`.
+- [ ] Na VPS (só leitura, para conferir): `git -C /opt/platform rev-parse HEAD` = SHA do merge; `docker compose -f /opt/platform/infra/docker-compose.yml ps --format '{{.Image}}'` mostra `:<sha>`.
 
 ## Checklist — repo `modelos` (combinar com ela)
 
@@ -20,7 +20,7 @@ Do doc ("CI/CD e operação"): no PR, `ruff` e `pytest` (testes das funções do
 
 - [ ] Ela (ou um agente no repo dela, com aprovação dela) cria `.github/workflows/ci.yml` com `ruff` e `pytest`.
 - [ ] Combinar o esquema de tag (ex.: `v0.1.0`, semver) e quem cria a tag (workflow no merge ou manual por ela).
-- [ ] Combinar como o modelo registrado no MLflow aponta para a versão do pacote (decisão P12: uma tag na versão do modelo no MLflow, ex.: `pacote_modelos=v0.1.0`). Isso é contrato e precisa do ADR do PR 44 antes da Fase 4.
+- [ ] Combinar como o modelo registrado no MLflow aponta para a versão do pacote (decisão P12: uma tag na versão do modelo no MLflow, ex.: `models_package=v0.1.0`). Isso é contrato e precisa do ADR do PR 44 antes da Fase 4.
 - [ ] O repo `modelos` é público (P2 resolvida): o job de score instala o pacote sem token. Combinar com ela que nada de segredo entra nesse repo, nem em notebook commitado.
 
 ## Verificação de pronto

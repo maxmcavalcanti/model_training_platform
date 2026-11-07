@@ -1,11 +1,11 @@
-# 46 — Flow `score_modelos` e deployment às 07:30
+# 46 — Flow `score_models` e deployment às 07:30
 
 > Executa: agente. Depende de: 45. Branch sugerida: `feat/flow-score`.
 > TDD: test-writer (vermelho) → implementação (verde) → refatorar.
 
 ## 1. Objetivo
 
-Criar o flow diário que, para cada modelo com `champion`, roda `flows.score_um` no ambiente isolado da versão certa do pacote `modelos`, e agendá-lo às 07:30 BRT.
+Criar o flow diário que, para cada modelo com `champion`, roda `flows.score_one` no ambiente isolado da versão certa do pacote `modelos`, e agendá-lo às 07:30 BRT.
 Falha de um modelo não impede os outros; o flow termina `Failed` se algum falhou.
 
 ## 2. Fora do escopo
@@ -20,26 +20,26 @@ Fase 4 — "Job genérico de score lendo `@champion`".
 
 | Caminho | Motivo |
 | --- | --- |
-| `flows/score_flow.py` | `@flow(name="score_modelos")` e `@task pontuar_modelo` |
-| `flows/deployments.py` | Entrada `score_modelos` com cron `30 7 * * *` |
-| `infra/docker-compose.yml` | `prefect-worker`: `DATABASE_URL_SCORER`, `MLFLOW_TRACKING_URI=http://mlflow:5000`, `MODELOS_REPO` (repo público, sem token); `depends_on: mlflow` |
-| `infra/.env.example` | `POSTGRES_SCORER_SENHA` |
+| `flows/score_flow.py` | `@flow(name="score_models")` e `@task score_model` |
+| `flows/deployments.py` | Entrada `score_models` com cron `30 7 * * *` |
+| `infra/docker-compose.yml` | `prefect-worker`: `DATABASE_URL_SCORER`, `MLFLOW_TRACKING_URI=http://mlflow:5000`, `MODELS_REPO` (repo público, sem token); `depends_on: mlflow` |
+| `infra/.env.example` | `POSTGRES_SCORER_PASSWORD` |
 | `tests/test_flow_score.py`, `tests/test_deployments.py`, `tests/infra/test_compose.py` | Testes (test-writer) |
 
-Do doc: "07:30 `score_modelos` — Para cada modelo com `champion`, gera previsões do dia". "Trocar o alias `champion` para outra versão é o deploy. Nenhum PR na plataforma, nenhuma ação minha."
+Do doc: "07:30 `score_models` — Para cada modelo com `champion`, gera previsões do dia". "Trocar o alias `champion` para outra versão é o deploy. Nenhum PR na plataforma, nenhuma ação minha."
 
-Código existente: `flows/registro.py` (`listar_champions`), `flows/executor.py` (`montar_comando`, `executar`, `ExecucaoFalhou`), `flows/deployments.py` (`DEPLOYMENTS`, `registrar`), `flows/score_um.py` (argumentos `--modelo --versao --data --gerado-em`).
+Código existente: `flows/registry.py` (`list_champions`), `flows/executor.py` (`build_command`, `executar`, `RunFailed`), `flows/deployments.py` (`DEPLOYMENTS`, `registrar`), `flows/score_one.py` (argumentos `--model --version --date --generated-at`).
 
 ## 5. Passos
 
-1. (test-writer) Testes da seção 8 com `prefect_test_harness`, `monkeypatch` de `listar_champions` e de `executar` (registrando comandos). Acrescente em `tests/test_deployments.py`: `score_modelos` com `30 7 * * *`. Em `tests/infra/test_compose.py`: o worker tem `DATABASE_URL_SCORER` com o usuário `scorer` e `MLFLOW_TRACKING_URI` interno. Confirme falha. Commit `test: add score flow tests`.
+1. (test-writer) Testes da seção 8 com `prefect_test_harness`, `monkeypatch` de `list_champions` e de `executar` (registrando comandos). Acrescente em `tests/test_deployments.py`: `score_models` com `30 7 * * *`. Em `tests/infra/test_compose.py`: o worker tem `DATABASE_URL_SCORER` com o usuário `scorer` e `MLFLOW_TRACKING_URI` interno. Confirme falha. Commit `test: add score flow tests`.
 2. (implementer) `flows/score_flow.py`:
-   - `score_modelos(data_ref: date | None = None)`: `data_ref` padrão = hoje em `America/Sao_Paulo`; `gerado_em` = agora (UTC), o mesmo para todos os modelos da execução.
+   - `score_models(ref_date: date | None = None)`: `ref_date` padrão = hoje em `America/Sao_Paulo`; `generated_at` = agora (UTC), o mesmo para todos os modelos da execução.
    - Lista os champions; nenhum → log "nenhum modelo com champion" e `Completed`.
-   - Para cada champion, a task `pontuar_modelo` (sem retries): `pacote_versao` ausente → falha da task com mensagem "modelo X sem tag pacote_modelos"; senão `executar(montar_comando(pacote_versao, "flows.score_um", [...]))`.
+   - Para cada champion, a task `score_model` (sem retries): `package_version` ausente → falha da task com mensagem "modelo X sem tag models_package"; senão `executar(build_command(package_version, "flows.score_one", [...]))`.
    - Submete as tasks e espera todas; se alguma falhou, o flow levanta erro listando os modelos que falharam (depois de todas terminarem).
-3. `flows/deployments.py`: entrada `score_modelos` às `30 7 * * *`.
-4. Compose: variáveis do worker como na tabela; `.env.example` com `POSTGRES_SCORER_SENHA`.
+3. `flows/deployments.py`: entrada `score_models` às `30 7 * * *`.
+4. Compose: variáveis do worker como na tabela; `.env.example` com `POSTGRES_SCORER_PASSWORD`.
 5. Rode os critérios de pronto.
 
 ## 6. Critérios de pronto
@@ -56,12 +56,12 @@ Código existente: `flows/registro.py` (`listar_champions`), `flows/executor.py`
 
 ## 8. Casos de teste
 
-1. Dois champions (`a` com `v0.1.0`, `b` com `v0.2.0`) → `executar` chamado duas vezes, cada uma com o `--with` da sua versão e o mesmo `--gerado-em`; flow `Completed`.
+1. Dois champions (`a` com `v0.1.0`, `b` com `v0.2.0`) → `executar` chamado duas vezes, cada uma com o `--with` da sua versão e o mesmo `--generated-at`; flow `Completed`.
 2. Nenhum champion → `executar` não é chamado; `Completed`.
-3. `a` falha (`ExecucaoFalhou`) e `b` funciona → `executar` chamado para os dois; flow `Failed` com mensagem citando `a`.
-4. Champion sem `pacote_versao` → essa task falha, as outras rodam; flow `Failed` citando o modelo.
-5. `score_modelos(data_ref=date(2026,11,7))` → todos os comandos com `--data 2026-11-07`.
-6. Deployment `score_modelos` com `30 7 * * *`, fuso `America/Sao_Paulo`, pool `plataforma`.
+3. `a` falha (`RunFailed`) e `b` funciona → `executar` chamado para os dois; flow `Failed` com mensagem citando `a`.
+4. Champion sem `package_version` → essa task falha, as outras rodam; flow `Failed` citando o modelo.
+5. `score_models(ref_date=date(2026,11,7))` → todos os comandos com `--date 2026-11-07`.
+6. Deployment `score_models` com `30 7 * * *`, fuso `America/Sao_Paulo`, pool `plataforma`.
 
 ## 9. Riscos e perguntas em aberto
 

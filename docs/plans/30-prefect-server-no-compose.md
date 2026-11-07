@@ -36,7 +36,7 @@ Os testes gerais do PR 03 (porta só em loopback ou IP do Tailscale, `mem_limit`
 2. (implementer) Serviço `prefect-server`:
    - `image: prefecthq/prefect:3.<minor>-python3.12` (fixe a minor atual conferida no Docker Hub; a mesma versão de `prefect` que o PR 32 vai pôr no `pyproject.toml`).
    - `command: ["prefect", "server", "start", "--host", "0.0.0.0"]` (dentro do container), `restart: unless-stopped`, `ports: ["127.0.0.1:4200:4200"]`, `mem_limit: 640m` (estimativa server + worker de 500–800 MB; ajuste pelo 28a), `depends_on: postgres` saudável.
-   - `environment`: `PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:${PREFECT_DB_SENHA}@postgres:5432/prefect`, `PREFECT_UI_API_URL: https://${TS_HOSTNAME}:4200/api`.
+   - `environment`: `PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:${PREFECT_DB_PASSWORD}@postgres:5432/prefect`, `PREFECT_UI_API_URL: https://${TS_HOSTNAME}:4200/api`.
    - `healthcheck` em `http://localhost:4200/api/health`.
 3. `infra/scripts/tailscale-serve.sh`: acrescente `tailscale serve --bg --https=4200 http://127.0.0.1:4200`.
 4. `ci.yml`: no smoke, subir `prefect-server` com `--wait`.
@@ -47,7 +47,7 @@ Os testes gerais do PR 03 (porta só em loopback ou IP do Tailscale, `mem_limit`
 | Comando | Saída esperada |
 | --- | --- |
 | `uv run pytest tests/infra/` | Todos passam |
-| `docker compose -f infra/docker-compose.yml --env-file infra/.env.example up -d --wait postgres prefect-server` (depois de `criar-bancos`) | `prefect-server ... Healthy` |
+| `docker compose -f infra/docker-compose.yml --env-file infra/.env.example up -d --wait postgres prefect-server` (depois de `create-databases`) | `prefect-server ... Healthy` |
 | `curl -s http://127.0.0.1:4200/api/health` | `true` |
 | `docker compose -f infra/docker-compose.yml --env-file infra/.env.example ps --format '{{.Name}} {{.Ports}}'` | `prefect-server` com `127.0.0.1:4200->4200/tcp`; nenhuma linha com `0.0.0.0` |
 | `shellcheck infra/scripts/tailscale-serve.sh` | Sem saída |
