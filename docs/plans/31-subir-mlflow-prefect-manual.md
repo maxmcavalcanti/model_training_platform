@@ -1,7 +1,7 @@
 # 31 — Subir MLflow e Prefect na VPS e dar acesso à cientista (manual)
 
 > Executa: **usuário**. Depende de: 28, 28a, 29, 30 (merges na `main` e checkpoint de memória feito).
-> Fase do roadmap: Fase 3 — "MLflow e Prefect no compose" → libera o treino com registro. Rede só Tailscale (ADR do PR 03): sem DNS, sem senha de proxy.
+> Fase do roadmap: Fase 3 — "MLflow e Prefect no compose" → libera o treino com registro. Rede só Tailscale (ADR 0003): sem DNS, sem senha de proxy.
 
 ## Checklist
 
