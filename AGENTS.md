@@ -36,7 +36,9 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
 - Adicionar dependência: `uv add <pacote>` (dev: `uv add --dev <pacote>`). Sempre commitar `uv.lock`.
 - Postgres de teste local: `docker compose -f infra/docker-compose.dev.yml up -d`
 - Rodar só testes sem banco: `uv run pytest -m "not db"`
-- Migrações: ainda não existem (PR 06).
+- Aplicar migrações: `uv run alembic upgrade head` (usa `DATABASE_URL_ADMIN` ou `DATABASE_URL`)
+- Reverter uma: `uv run alembic downgrade -1`
+- Nova migração: `uv run alembic revision -m "<descrição>" --rev-id <NNNN>` (próximo número livre, 4 dígitos)
 
 ## Fluxo de trabalho
 
