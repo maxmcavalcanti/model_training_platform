@@ -6,7 +6,7 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
 
 - Este repo cuida de "o job rodou?". O repo `modelos` cuida de "o modelo está certo?".
 - O único ponto de passagem é o alias `champion` no MLflow. Trocar o alias é o deploy de um modelo.
-- Mudança em `raw` ou `ref` exige migração Alembic + ADR + aviso à ciência de dados. Mudança na assinatura de `build_features`, `predict` e `evaluate` exige ADR.
+- Mudança em `raw` ou `ref` exige migração Alembic + ADR + aviso à ciência de dados. Mudança na assinatura de `build_features`, `predict` e `evaluate` exige ADR. Mudança que publica porta ou expõe serviço fora do tailnet/loopback também exige ADR.
 
 ## Onde ler mais (carregue só o que a tarefa pedir)
 
@@ -21,7 +21,7 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
 - Todo job termina com checagem de qualidade (pandera). Checagem falha = execução falha.
 - Nenhum segredo no git. Segredos entram por variável de ambiente.
 - O deny de `Read` não impede leitura via Bash (`cat .env`); portanto agentes nunca devem ler arquivos `.env`, com nenhuma ferramenta. O deny também bloqueia `.env.example`; se um agente precisar das variáveis documentadas, o usuário cola o conteúdo.
-- TDD estrito: todo código de produção nasce de um teste vermelho. Ciclo: vermelho (test-writer) → implementação mínima → verde → refatorar com a suíte verde. Sem teste vermelho antes, sem código.
+- TDD estrito: todo código de produção nasce de um teste vermelho. Ciclo: vermelho (test-writer) → implementação mínima → verde → refatorar com a suíte verde. Sem teste vermelho antes, sem código. Exceção: refatoração com a suíte já verde não exige teste vermelho novo.
 - Merge na `main` é a única forma de mudar produção.
 
 ## Comandos
@@ -35,9 +35,9 @@ Ainda não há código. Quando o ambiente de desenvolvimento existir, liste aqui
   1. `task-planner` grava o plano com casos de teste em `docs/plans/` e o usuário aprova.
   2. `test-writer` escreve os testes e confirma que falham (pular se o plano disser "Testes necessários: não").
   3. `task-implementer` implementa em worktree partindo da branch com os testes, sem editar testes.
-  4. `code-reviewer` revisa antes do PR.
-  5. Abrir o PR (o CI roda no PR).
+  4. `code-reviewer` revisa antes do PR (dispensado em PR só de `docs/**`, ver abaixo).
+  5. Abrir o PR (o CI roda no PR): quem abre é o usuário, ou o `task-implementer` quando receber essa instrução.
   6. CI + `pr-reviewer`, que revisa o PR contra o plano (dispensado em PR só de `docs/**`, ver abaixo).
-- PR que altera somente `docs/**` (planos, ADRs, guias) dispensa o pr-reviewer: o usuário revisa se quiser e o merge pode ser feito sem revisão de agente. Qualquer PR que toque `.claude/`, `AGENTS.md`, `CLAUDE.md`, código, infra ou CI continua passando pelo code-reviewer e pelo pr-reviewer, mesmo quando só há Markdown, porque esses arquivos mudam o comportamento dos agentes ou do deploy.
+- PR que altera somente `docs/**` (planos, ADRs, guias) dispensa o `code-reviewer` e o `pr-reviewer`: o usuário revisa se quiser e o merge pode ser feito sem revisão de agente. Qualquer PR que toque algo fora de `docs/**` (por exemplo `.claude/`, `AGENTS.md`, `CLAUDE.md`, `.gitignore`, código, infra ou CI) passa por ambos, mesmo quando só há Markdown, porque esses arquivos mudam o comportamento dos agentes ou do deploy.
 - Uma fase do roadmap por vez. Não adiante itens de fases futuras.
 - Dê evidência de que funciona: o comando rodado e a saída, não só "deve funcionar".

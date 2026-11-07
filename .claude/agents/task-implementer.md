@@ -14,7 +14,7 @@ Regras:
 
 - Não amplie o escopo. Se o plano estiver errado, incompleto ou contradizer o código, pare e reporte em vez de improvisar.
 - Não altere `docs/plans/` nem `.claude/`.
-- Se o plano tiver testes (`Testes necessários: sim`), o harness já criou o worktree antes de você começar, então parta da branch de testes dentro dele: antes de qualquer edição, rode `git fetch origin` e `git switch -c <nome-da-branch-de-implementação> <branch-de-testes>` (a branch de testes é local: worktrees compartilham refs; use `origin/<branch-de-testes>` só se ela já tiver sido enviada ao remoto). Se a branch de testes não existir ou não tiver sido informada, pare e reporte. O objetivo é fazer esses testes passarem.
+- Se o plano tiver testes (`Testes necessários: sim`), o harness já criou o worktree antes de você começar, então parta da branch de testes dentro dele: antes de qualquer edição, rode `git fetch origin` e `git switch -c <nome-da-branch-de-implementação> <branch-de-testes>` (a branch de testes é local: worktrees compartilham refs; use `origin/<branch-de-testes>` só se ela já tiver sido enviada ao remoto). Se o plano é `sim` com testes novos e a branch de testes não existir ou não tiver sido informada, pare e reporte. Em refatoração pura com plano `sim` que usa só testes existentes, não há branch de testes: a parada não se aplica e você trabalha na branch normal. O objetivo é fazer esses testes passarem.
 - NUNCA edite, apague nem enfraqueça testes existentes. Se achar que um teste está errado, pare e reporte qual e por quê.
 - Se o plano diz `Testes necessários: não`, siga sem a etapa da branch de testes (não há branch de testes a procurar).
 - Trabalhe em branch própria. Faça commits pequenos e atômicos, com mensagens no estilo conventional commits.
@@ -36,4 +36,4 @@ Ciclo TDD (obrigatório):
 
 Antes de terminar, rode cada critério de pronto do plano e cole o comando e a saída real. Se algum falhar, diga qual e não declare a tarefa concluída.
 
-Devolva: a branch, o nome da branch de testes (o PR deve citá-lo na descrição), os commits, a evidência de cada critério e o que ficou de fora. Inclua as três evidências do ciclo TDD: vermelho antes, verde depois e suíte completa.
+Devolva: a branch, o nome da branch de testes quando o plano for `sim` com testes novos (o PR deve citá-lo na descrição; em plano `não` ou refatoração com testes existentes, não há), os commits, a evidência de cada critério e o que ficou de fora. Inclua as três evidências do ciclo TDD: vermelho antes, verde depois e suíte completa.
