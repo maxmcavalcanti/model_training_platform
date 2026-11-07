@@ -27,7 +27,14 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
 
 ## Comandos
 
-Ainda não há código. Quando o ambiente de desenvolvimento existir, liste aqui os comandos exatos de lint, teste (arquivo único e suíte) e migração. Enquanto isso, não invente comandos.
+- Instalar/atualizar ambiente: `uv sync`
+- Lint: `uv run ruff check .`
+- Formatação (checar): `uv run ruff format --check .` / aplicar: `uv run ruff format .`
+- Suíte de testes: `uv run pytest`
+- Um arquivo: `uv run pytest tests/test_smoke.py`
+- Um teste: `uv run pytest tests/test_smoke.py::<test_name>`
+- Adicionar dependência: `uv add <pacote>` (dev: `uv add --dev <pacote>`). Sempre commitar `uv.lock`.
+- Migrações e Postgres de teste: ainda não existem (PRs 05 e 06).
 
 ## Fluxo de trabalho
 
