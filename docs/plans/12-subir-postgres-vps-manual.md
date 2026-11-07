@@ -13,8 +13,9 @@ Na VPS, como `deploy`, em `/opt/platform`:
 
 - [ ] `git pull`.
 - [ ] Gerar senhas fortes (ex.: `openssl rand -base64 24`) para: admin, `ingestor`, `scientist`, `scorer`, `reader`. Guardar no gerenciador de senhas.
-- [ ] Acrescentar ao `infra/.env` (ver `infra/.env.example`): `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BIND_IP=<tailscale ip -4>` (ou `127.0.0.1`, se a P15 escolher `tailscale serve --tcp=5432`; nunca `0.0.0.0`), `POSTGRES_INGESTOR_PASSWORD`. Conferir `stat -c '%a' infra/.env` = `600`.
+- [ ] Acrescentar ao `infra/.env` (ver `infra/.env.example`): `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BIND_IP=127.0.0.1` (nunca `0.0.0.0`), `POSTGRES_INGESTOR_PASSWORD`. Conferir `stat -c '%a' infra/.env` = `600`.
 - [ ] `docker compose -f infra/docker-compose.yml up -d --wait postgres`.
+- [ ] `infra/scripts/tailscale-serve.sh`; `tailscale serve status` lista a porta 5432 (P15, ADR 0003).
 - [ ] `docker compose -f infra/docker-compose.yml build jobs`.
 - [ ] Migrar: `docker compose -f infra/docker-compose.yml run --rm -e DATABASE_URL=$DATABASE_URL_ADMIN jobs alembic upgrade head` — ou, mais simples, `... run --rm jobs alembic upgrade head` (o `env.py` prefere `DATABASE_URL_ADMIN`, que o serviço `jobs` já recebe).
 - [ ] Definir as senhas dos papéis (a migração cria os papéis sem senha, de propósito). Rodar sem deixar a senha no histórico do shell (por exemplo, com `read -s` antes):
@@ -34,5 +35,5 @@ Na VPS, como `deploy`, em `/opt/platform`:
 
 Teste de reboot:
 
-- [ ] `sudo reboot`; depois, sem entrar na VPS, o `psql` dela volta a funcionar e `curl -s https://<host>.ts.net:8080/health` responde `ok`. Se o Postgres não subir por falta do IP do Tailscale, ver P15 no índice.
+- [ ] `sudo reboot`; depois, sem entrar na VPS, o `psql` dela volta a funcionar e `curl -s https://<host>.ts.net:8080/health` responde `ok`. Se o reboot exigir qualquer intervenção (inclusive rodar de novo o `tailscale-serve.sh`), devolva para o planejamento.
 - [ ] Na VPS: `docker ps --format '{{.Names}} {{.Ports}}' | grep -c '0\.0\.0\.0'` → `0`.

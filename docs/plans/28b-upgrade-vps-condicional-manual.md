@@ -29,7 +29,7 @@ Container com `OOMKilled=true` e host com memória sobrando não é gatilho: aju
 | --- | --- |
 | `free -m` | Linha `Mem:` com o total novo (cerca de `1900`+ para 2 GB, `3800`+ para 4 GB); `Swap:` ainda perto de `2047` |
 | `nproc` | Número de vCPUs do plano novo |
-| `tailscale ip -4` | O mesmo IP do Tailscale de antes (se mudou, atualizar `POSTGRES_BIND_IP` no `.env` e o `VPS_KNOWN_HOSTS` do item 38, se já existir) |
+| `tailscale ip -4` | O mesmo IP do Tailscale de antes (se mudou, atualizar o `VPS_KNOWN_HOSTS` do item 38, se já existir) |
 | `docker compose -f /opt/platform/infra/docker-compose.yml ps` | Todos `Up` (`healthy` onde há healthcheck) |
 | Do notebook: `curl -s https://<host>.ts.net:8080/health` | `ok` |
 
