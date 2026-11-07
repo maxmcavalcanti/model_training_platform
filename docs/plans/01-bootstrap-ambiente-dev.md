@@ -39,7 +39,7 @@ Pré-requisito da Fase 0 (`docs/plataforma-ml.md`, seção "Roadmap"). O roadmap
 1. Confirme que o `uv` está instalado: `uv --version`. Se não estiver, pare e reporte ao usuário (a toolchain foi aprovada em 2026-11-07, P1 resolvida; falta só a instalação).
 2. Crie `.python-version` com o conteúdo `3.12`.
 3. Crie `pyproject.toml`:
-   - `[project]`: `name = "plataforma"`, `version = "0.1.0"`, `requires-python = ">=3.12,<3.13"`, `dependencies = []`.
+   - `[project]`: `name = "platform"`, `version = "0.1.0"`, `requires-python = ">=3.12,<3.13"`, `dependencies = []`.
    - `[dependency-groups]`: `dev = ["pytest", "ruff", "pyyaml"]` (pyyaml é usado pelos testes de compose do PR 03; incluir agora evita um commit só de dependência lá). Adicione com `uv add --dev pytest ruff pyyaml` para que as versões fiquem no lock.
    - `[build-system]`: `requires = ["hatchling"]`, `build-backend = "hatchling.build"`.
    - `[tool.hatch.build.targets.wheel]`: `packages = ["ingestion", "flows"]`.

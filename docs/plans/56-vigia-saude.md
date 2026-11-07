@@ -5,7 +5,7 @@
 
 ## 1. Objetivo
 
-Criar um flow `watch_health`, a cada 15 minutos, que checa uso de disco da VPS e a saúde de `saude`, MLflow, Prefect, Grafana e Postgres, e manda alerta no Telegram quando algo passa do limite.
+Criar um flow `watch_health`, a cada 15 minutos, que checa uso de disco da VPS e a saúde de `health`, MLflow, Prefect, Grafana e Postgres, e manda alerta no Telegram quando algo passa do limite.
 Avisa uma vez por problema (não a cada 15 minutos) e avisa quando volta ao normal.
 
 ## 2. Fora do escopo
@@ -21,7 +21,7 @@ Fase 5 — "Alertas no Telegram".
 
 | Caminho | Motivo |
 | --- | --- |
-| `flows/watchdog.py` | `check_disk(caminho, limite)`, `check_services(cliente, alvos)`, `@flow watch_health` |
+| `flows/watchdog.py` | `check_disk(path, threshold)`, `check_services(client, targets)`, `@flow watch_health` |
 | `flows/deployments.py` | `watch_health` com `*/15 * * * *` |
 | `infra/docker-compose.yml` | Montar o disco do host somente leitura no worker (ex.: `/:/host:ro`) para medir uso |
 | `tests/test_watchdog.py`, `tests/test_deployments.py` | Testes (test-writer) |
@@ -30,14 +30,14 @@ Do doc: "Alertas: … disco acima de 80%, serviço fora do ar → Telegram".
 
 Código existente: `flows/alerts.py` (`send_telegram`, `notify_failure`), `flows/deployments.py`.
 
-Alvos de saúde (rede interna do compose): `http://mlflow:5000/health` (corpo `OK`), `http://prefect-server:4200/api/health` (`true`), `http://grafana:3000/api/health` (`"database": "ok"`), `http://saude:8080/saude` (`ok`), Postgres com `SELECT 1` usando `DATABASE_URL`.
+Alvos de saúde (rede interna do compose): `http://mlflow:5000/health` (corpo `OK`), `http://prefect-server:4200/api/health` (`true`), `http://grafana:3000/api/health` (`"database": "ok"`), `http://health:8080/health` (`ok`), Postgres com `SELECT 1` usando `DATABASE_URL`.
 
 ## 5. Passos
 
 1. (test-writer) Testes da seção 8 com `httpx.MockTransport`, `shutil.disk_usage` falso via `monkeypatch` e `send_telegram` falso. Confirme falha. Commit `test: add health watcher tests`.
 2. (implementer) `flows/watchdog.py`:
-   - `check_disk(caminho="/host", limite=0.80) -> Problema | None`.
-   - `check_services(cliente, alvos) -> list[Problema]` com timeout de 5 s por alvo.
+   - `check_disk(path="/host", threshold=0.80) -> Problema | None`.
+   - `check_services(client, targets) -> list[Problema]` com timeout de 5 s por alvo.
    - Estado entre execuções: um `Variable` do Prefect (`prefect.variables.Variable`) com o conjunto de problemas abertos. Problema novo → alerta "ALERTA"; problema que sumiu → alerta "RESOLVIDO"; problema que continua → nada.
    - O flow termina `Completed` mesmo com problemas (o alerta já foi enviado; `Failed` dispararia `notify_failure` e duplicaria a mensagem). Não use `on_failure` neste flow além do padrão.
 3. Deployment `*/15 * * * *` e montagem do disco.
@@ -57,10 +57,10 @@ Alvos de saúde (rede interna do compose): `http://mlflow:5000/health` (corpo `O
 
 ## 8. Casos de teste
 
-1. Disco em 85% e nenhum problema aberto → um alerta com `disco` e `85%`.
+1. Disco em 85% e nenhum problema aberto → um alerta com `disk` e `85%`.
 2. Execução seguinte, ainda 85% → nenhum alerta novo.
 3. Execução seguinte, 60% → um alerta `RESOLVIDO` de disco.
-4. MLflow respondendo 502 → alerta citando `mlflow`; Prefect, Grafana e `saude` saudáveis não geram alerta.
+4. MLflow respondendo 502 → alerta citando `mlflow`; Prefect, Grafana e `health` saudáveis não geram alerta.
 5. Alvo que estoura o timeout → tratado como fora do ar.
 6. Postgres recusando conexão → alerta citando `postgres`.
 7. Tudo saudável → nenhum alerta; flow `Completed`.

@@ -12,7 +12,7 @@ Regra (`.claude/rules/infra.md`): "Segredos do CI vão em GitHub Secrets". Os re
 
 Tailscale (o runner do GitHub entra na tailnet só durante o deploy):
 
-- [ ] Na ACL, criar a tag `tag:ci` e permitir `tag:ci` → `tag:platform:22,8080` apenas (22 para o SSH do deploy; 8080 para a checagem final de `/saude` do PR 39).
+- [ ] Na ACL, criar a tag `tag:ci` e permitir `tag:ci` → `tag:platform:22,8080` apenas (22 para o SSH do deploy; 8080 para a checagem final de `/health` do PR 39).
 - [ ] Criar um OAuth client (Settings → OAuth clients) com escopo para dispositivos efêmeros e a tag `tag:ci`. Guardar `client_id` e `secret`.
 
 VPS:
@@ -23,9 +23,9 @@ VPS:
 - [ ] Em `infra/.env`: `GHCR_OWNER=<dono em minúsculas>`, `IMAGE_TAG=main`.
 - [ ] Trocar o fluxo manual: `docker compose -f infra/docker-compose.yml pull && docker compose -f infra/docker-compose.yml up -d --remove-orphans` (sem `build`).
 
-GitHub (Settings → Environments → `producao`):
+GitHub (Settings → Environments → `production`):
 
-- [ ] Criar o environment `producao`, restrito à branch `main`.
+- [ ] Criar o environment `production`, restrito à branch `main`.
 - [ ] Secrets do environment: `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`, `VPS_HOST` (nome no Tailscale), `VPS_SSH_KEY` (conteúdo da chave privada `deploy_ci`), `VPS_KNOWN_HOSTS` (saída de `ssh-keyscan <nome-tailscale>` feita de dentro da tailnet).
 - [ ] Variável (não segredo) do environment: `TS_HOSTNAME` (`<host>.<tailnet>.ts.net`), usada na checagem final do deploy.
 - [ ] Apagar `deploy_ci` (privada) do disco local depois de colar no GitHub.
@@ -34,9 +34,9 @@ GitHub (Settings → Environments → `producao`):
 
 | Comando | Saída esperada |
 | --- | --- |
-| `gh secret list --env producao` | Os cinco nomes acima |
+| `gh secret list --env production` | Os cinco nomes acima |
 | Na VPS: `docker logout ghcr.io; docker compose -f infra/docker-compose.yml pull jobs` | Baixa `ghcr.io/<dono>/platform-jobs:main` sem login e sem erro de autenticação |
 | Na VPS: `test -f ~/.docker/config.json && grep -c ghcr.io ~/.docker/config.json` | Vazio ou `0` (nenhuma credencial do GHCR salva) |
-| `gh variable list --env producao` | `TS_HOSTNAME` |
+| `gh variable list --env production` | `TS_HOSTNAME` |
 | Na VPS: `docker compose -f infra/docker-compose.yml up -d --remove-orphans && docker compose -f infra/docker-compose.yml ps` | Todos `Up`, imagens do GHCR |
 | No painel do Tailscale | ACL com `tag:ci` só para as portas 22 e 8080 da VPS |

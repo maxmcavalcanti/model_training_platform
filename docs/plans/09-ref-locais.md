@@ -29,7 +29,7 @@ Modelo de dados (`docs/plataforma-ml.md`):
 
 | Tabela | Colunas principais | Chave | Escreve | Lê |
 | --- | --- | --- | --- | --- |
-| `ref.locations` | `location_id`, `nome`, `lat`, `lon`, `subsistema` | `location_id` | Plataforma | Todos |
+| `ref.locations` | `location_id`, `name`, `lat`, `lon`, `subsystem` | `location_id` | Plataforma | Todos |
 
 "Locais de clima (proposta): uma capital por subsistema — São Paulo (SE/CO), Porto Alegre (S), Recife (NE), Belém (N)."
 
@@ -39,10 +39,10 @@ Modelo de dados (`docs/plataforma-ml.md`):
 2. (implementer) `uv run alembic revision -m "ref_locations" --rev-id 0003`.
 3. `upgrade`: crie a tabela:
    - `location_id text primary key` (slug minúsculo, `^[a-z_]+$`, via `CHECK`)
-   - `nome text not null`
+   - `name text not null`
    - `lat double precision not null check (lat between -90 and 90)`
    - `lon double precision not null check (lon between -180 and 180)`
-   - `subsistema text not null check (subsistema in ('SE','S','NE','N'))` (códigos usados pelo ONS; SE inclui CO)
+   - `subsystem text not null check (subsystem in ('SE','S','NE','N'))` (códigos usados pelo ONS; SE inclui CO)
    - Depois, `op.bulk_insert` com:
 
    | location_id | nome | lat | lon | subsistema |
@@ -72,17 +72,17 @@ Modelo de dados (`docs/plataforma-ml.md`):
 
 ## 8. Casos de teste
 
-1. Após `upgrade head`, `SELECT location_id, subsistema FROM ref.locations ORDER BY location_id` devolve exatamente as 4 linhas da tabela do passo 3.
+1. Após `upgrade head`, `SELECT location_id, subsystem FROM ref.locations ORDER BY location_id` devolve exatamente as 4 linhas da tabela do passo 3.
 2. Cada subsistema `SE`, `S`, `NE`, `N` aparece exatamente uma vez.
-3. Inserir `subsistema = 'CO'` falha (violação de `CHECK`).
+3. Inserir `subsystem = 'CO'` falha (violação de `CHECK`).
 4. Inserir `lat = 91` falha.
 5. Inserir `location_id = 'São Paulo'` falha (slug inválido).
-6. Como `leitura`, `SELECT` funciona; como `ingestor`, `INSERT` de uma 5ª cidade funciona; como `cientista`, `INSERT` falha.
+6. Como `reader`, `SELECT` funciona; como `ingestor`, `INSERT` de uma 5ª cidade funciona; como `scientist`, `INSERT` falha.
 7. `downgrade` até `0002` remove a tabela.
 
 ## 9. Riscos e perguntas em aberto
 
-- P18: formato de `location_id` (slug texto) é proposta deste plano; o doc não define. Confirmar com o usuário antes do merge, porque vira chave em `raw.clima_*` e em `predictions.model_predictions.chave` do `rain_d1`.
+- P18: formato de `location_id` (slug texto) é proposta deste plano; o doc não define. Confirmar com o usuário antes do merge, porque vira chave em `raw.clima_*` e em `predictions.model_predictions.key` do `rain_d1`.
 - Coordenadas com 2 casas (~1 km) bastam para a grade do Open-Meteo.
 
 ## 10. Decisões que exigem ADR

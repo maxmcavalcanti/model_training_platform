@@ -59,7 +59,7 @@ Tudo roda num único `docker compose`, com ferramentas open source que ela vai e
 
 Dois repositórios, um por dono: assim a fronteira fica visível no próprio GitHub, igual em uma empresa.
 
-**`plataforma`** (meu)
+**`platform`** (meu)
 
 ```
 plataforma/
@@ -77,7 +77,7 @@ plataforma/
 └── .github/workflows/    # ci.yml, deploy.yml
 ```
 
-**`modelos`** (dela)
+**`models`** (dela)
 
 ```
 modelos/
@@ -90,7 +90,7 @@ modelos/
 └── .github/workflows/ci.yml
 ```
 
-O job de score da plataforma instala o pacote `modelos` numa versão marcada (tag) e chama as funções do contrato. Ela nunca precisa mexer no repositório `plataforma` para colocar um modelo novo em produção.
+O job de score da plataforma instala o pacote `models` numa versão marcada (tag) e chama as funções do contrato. Ela nunca precisa mexer no repositório `platform` para colocar um modelo novo em produção.
 
 ## Modelo de dados
 
@@ -98,18 +98,18 @@ Um schema por responsabilidade no banco `ml`; as permissões seguem a mesma divi
 
 | Tabela | Colunas principais | Chave | Escreve | Lê |
 | --- | --- | --- | --- | --- |
-| `ref.locations` | `location_id`, `nome`, `lat`, `lon`, `subsistema` | `location_id` | Plataforma | Todos |
-| `ref.calendar` | `data`, `weekday`, `is_national_holiday`, `holiday_name` | `data` | Plataforma (lib `holidays`) | Todos |
-| `raw.ons_daily_load` | `subsistema`, `data`, `load_avg_mw`, `ingested_at` | (`subsistema`, `data`) | Plataforma | Todos |
-| `raw.weather_observed` | `location_id`, `data`, `temp_max`, `temp_min`, `precip_mm`, `wind_speed_max`, `humidity_mean`, `ingested_at` | (`location_id`, `data`) | Plataforma | Todos |
+| `ref.locations` | `location_id`, `name`, `lat`, `lon`, `subsystem` | `location_id` | Plataforma | Todos |
+| `ref.calendar` | `date`, `weekday`, `is_national_holiday`, `holiday_name` | `date` | Plataforma (lib `holidays`) | Todos |
+| `raw.ons_daily_load` | `subsystem`, `date`, `load_avg_mw`, `ingested_at` | (`subsystem`, `date`) | Plataforma | Todos |
+| `raw.weather_observed` | `location_id`, `date`, `temp_max`, `temp_min`, `precip_mm`, `wind_speed_max`, `humidity_mean`, `ingested_at` | (`location_id`, `date`) | Plataforma | Todos |
 | `raw.weather_forecast` | `location_id`, `issued_at`, `target_date`, `horizon_days`, mesmas variáveis, `ingested_at` | (`location_id`, `issued_at`, `target_date`) | Plataforma | Todos |
 | `features.*` | Definidas por ela | Definidas por ela | Ciência de dados | Todos |
-| `predictions.model_predictions` | `modelo`, `model_version`, `chave`, `target_date`, `predicted_value`, `generated_at` | (`modelo`, `chave`, `target_date`, `generated_at`) | Job de score | Todos |
-| `monitoring.model_metrics` | `modelo`, `model_version`, `data`, `metrica`, `valor` | (`modelo`, `data`, `metrica`) | Job de monitoramento | Todos |
+| `predictions.model_predictions` | `model_name`, `model_version`, `key`, `target_date`, `predicted_value`, `generated_at` | (`model_name`, `key`, `target_date`, `generated_at`) | Job de score | Todos |
+| `monitoring.model_metrics` | `model_name`, `model_version`, `date`, `metric`, `value` | (`model_name`, `date`, `metric`) | Job de monitoramento | Todos |
 
-`chave` é o que o modelo prevê: o subsistema no modelo de carga, o `location_id` no de chuva. Assim uma única tabela de previsões serve a todos os modelos.
+`key` é o que o modelo prevê: o subsistema no modelo de carga, o `location_id` no de chuva. Assim uma única tabela de previsões serve a todos os modelos.
 
-**Usuários do Postgres:** `ingestor` (escreve `raw` e `ref`), `cientista` (lê tudo, escreve `features`), `scorer` (escreve `predictions` e `monitoring`), `leitura` (Grafana).
+**Usuários do Postgres:** `ingestor` (escreve `raw` e `ref`), `scientist` (lê tudo, escreve `features`), `scorer` (escreve `predictions` e `monitoring`), `reader` (Grafana).
 
 ## Ingestão
 
@@ -168,8 +168,8 @@ Merge na `main` é a única forma de algo mudar em produção, nos dois reposit�
 
 | Repositório | No PR | No merge na `main` |
 | --- | --- | --- |
-| `plataforma` | `ruff`, `pytest` com Postgres de serviço, `alembic upgrade` num banco vazio | Build da imagem → GHCR → SSH na VPS: `alembic upgrade head`, `docker compose pull && up -d`, registra deployments do Prefect |
-| `modelos` | `ruff`, `pytest` (testes das funções do contrato com dados de amostra) | Cria tag de versão; o job de score passa a instalar essa versão |
+| `platform` | `ruff`, `pytest` com Postgres de serviço, `alembic upgrade` num banco vazio | Build da imagem → GHCR → SSH na VPS: `alembic upgrade head`, `docker compose pull && up -d`, registra deployments do Prefect |
+| `models` | `ruff`, `pytest` (testes das funções do contrato com dados de amostra) | Cria tag de versão; o job de score passa a instalar essa versão |
 
 **Operação:**
 

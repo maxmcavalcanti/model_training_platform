@@ -23,21 +23,21 @@ Fase 3 — "Ingestões migradas para flows do Prefect".
 | --- | --- |
 | `pyproject.toml`, `uv.lock` | `prefect==<mesma versão do server do PR 30>` (passo 0) |
 | `flows/ingest.py` | Os três flows |
-| `ingestion/jobs.py` | Extrair `default_window(hoje, dias)` se CLI e flows precisarem do mesmo cálculo (refatoração, sem mudar comportamento) |
+| `ingestion/jobs.py` | Extrair `default_window(today, days)` se CLI e flows precisarem do mesmo cálculo (refatoração, sem mudar comportamento) |
 | `tests/test_flows_ingest.py` | Testes (test-writer) |
 
-Código existente (leia antes): `ingestion/jobs.py` com `ingest_weather_forecast(engine, cliente, hoje, *, base_delay)`, `ingest_ons_load(engine, cliente, inicio, fim, *, max_delay_days, base_delay)`, `ingest_weather_observed(engine, cliente, inicio, fim, *, max_delay_days, base_delay)`; `ingestion/cli.py` mostra como cada um é chamado com os padrões (janela de 30 dias para ONS, 10 para observado, hoje em `America/Sao_Paulo`).
+Código existente (leia antes): `ingestion/jobs.py` com `ingest_weather_forecast(engine, client, today, *, base_delay)`, `ingest_ons_load(engine, client, start, end, *, max_delay_days, base_delay)`, `ingest_weather_observed(engine, client, start, end, *, max_delay_days, base_delay)`; `ingestion/cli.py` mostra como cada um é chamado com os padrões (janela de 30 dias para ONS, 10 para observado, hoje em `America/Sao_Paulo`).
 
 Do doc: "Falha de checagem = execução falha no Prefect = alerta no Telegram". "Erro dentro do código dela aparece no Prefect com o traceback".
 
 ## 5. Passos
 
 0. (implementer) `uv add prefect==<versão>`. Commit `build: add prefect`.
-1. (test-writer) Escreva os testes da seção 8 com `prefect.testing.utilities.prefect_test_harness` (fixture de sessão) e `monkeypatch` das funções de `ingestion.jobs` para registrar chamadas. Confirme falha por `ModuleNotFoundError: flows.ingestao`. Commit `test: add ingestion flow tests`.
+1. (test-writer) Escreva os testes da seção 8 com `prefect.testing.utilities.prefect_test_harness` (fixture de sessão) e `monkeypatch` das funções de `ingestion.jobs` para registrar chamadas. Confirme falha por `ModuleNotFoundError: flows.ingest`. Commit `test: add ingestion flow tests`.
 2. (implementer) `flows/ingest.py`:
-   - `@flow(name="ingest_weather_forecast", retries=0)` sem parâmetros: cria engine (`build_engine()`), `httpx.Client(timeout=30)`, `hoje` em `America/Sao_Paulo`, chama `jobs.ingest_weather_forecast`.
-   - `@flow(name="ingest_ons_load", retries=0)` com parâmetros opcionais `inicio: date | None`, `fim: date | None`, `dias: int = 30` (backfill pela UI do Prefect).
-   - `@flow(name="ingest_weather_observed", retries=0)` com os mesmos parâmetros, `dias: int = 10`.
+   - `@flow(name="ingest_weather_forecast", retries=0)` sem parâmetros: cria engine (`build_engine()`), `httpx.Client(timeout=30)`, `today` em `America/Sao_Paulo`, chama `jobs.ingest_weather_forecast`.
+   - `@flow(name="ingest_ons_load", retries=0)` com parâmetros opcionais `start: date | None`, `end: date | None`, `days: int = 30` (backfill pela UI do Prefect).
+   - `@flow(name="ingest_weather_observed", retries=0)` com os mesmos parâmetros, `days: int = 10`.
    - Sem `retries` no flow: o retry de rede já está em `ingestion/http.py`; repetir o flow inteiro duplicaria esperas e não ajuda em falha de checagem.
    - Usar `get_run_logger()` para registrar o intervalo processado.
    - Nenhuma regra nova aqui: se precisar decidir algo, é no job.
@@ -48,7 +48,7 @@ Do doc: "Falha de checagem = execução falha no Prefect = alerta no Telegram". 
 | Comando | Saída esperada |
 | --- | --- |
 | `uv run pytest tests/test_flows_ingest.py` | Todos passam |
-| `uv run python -c "from flows.ingestao import ingest_weather_forecast, ingest_ons_load, ingest_weather_observed; print('ok')"` | `ok` |
+| `uv run python -c "from flows.ingest import ingest_weather_forecast, ingest_ons_load, ingest_weather_observed; print('ok')"` | `ok` |
 | `uv run pytest` | Suíte verde (inclui os testes da CLI, que não podem mudar) |
 | `gh pr checks` | Verde |
 
@@ -58,12 +58,12 @@ Do doc: "Falha de checagem = execução falha no Prefect = alerta no Telegram". 
 
 ## 8. Casos de teste
 
-1. `ingest_weather_forecast()` com o job falso devolvendo `None` → estado final `Completed`; o job foi chamado uma vez com `hoje` igual à data atual em `America/Sao_Paulo`.
+1. `ingest_weather_forecast()` com o job falso devolvendo `None` → estado final `Completed`; o job foi chamado uma vez com `today` igual à data atual em `America/Sao_Paulo`.
 2. Job falso levantando `CheckFailed("x")` → estado `Failed` e a mensagem do estado contém `x`; o job foi chamado **uma** vez (sem retry do flow).
-3. `ingest_ons_load()` sem parâmetros → job chamado com `fim` = hoje e `inicio` = hoje − 29.
-4. `ingest_ons_load(inicio=date(2015,1,1), fim=date(2015,12,31))` → job chamado com esse intervalo.
-5. `ingest_weather_observed()` sem parâmetros → `inicio` = hoje − 9.
-6. `ingest_ons_load(inicio=date(2026,2,1), fim=date(2026,1,1))` → `Failed` sem chamar o job.
+3. `ingest_ons_load()` sem parâmetros → job chamado com `end` = hoje e `start` = hoje − 29.
+4. `ingest_ons_load(start=date(2015,1,1), end=date(2015,12,31))` → job chamado com esse intervalo.
+5. `ingest_weather_observed()` sem parâmetros → `start` = hoje − 9.
+6. `ingest_ons_load(start=date(2026,2,1), end=date(2026,1,1))` → `Failed` sem chamar o job.
 7. Os nomes dos três flows são exatamente `ingest_weather_forecast`, `ingest_ons_load`, `ingest_weather_observed` (são os nomes do doc e viram nomes de deployment).
 
 ## 9. Riscos e perguntas em aberto

@@ -35,7 +35,7 @@ Todas são padrão de mercado e aparecem nas vagas; não use nada além disso no
 | Prefect (só a interface) | Ver se o job do seu modelo rodou e ler o erro | Só leitura |
 | Grafana | Painel de erro do seu modelo | Montar 2 ou 3 gráficos |
 
-**Estrutura de pastas:** o repositório `modelos` é seu e segue o esqueleto do documento da plataforma. Notebook é para explorar; tudo que vai para produção mora em `src/models/`.
+**Estrutura de pastas:** o repositório `models` é seu e segue o esqueleto do documento da plataforma. Notebook é para explorar; tudo que vai para produção mora em `src/models/`.
 
 ## Os dois modelos
 
@@ -83,7 +83,7 @@ Faça primeiro o `load_d1` inteiro, até produção, e só depois o `rain_d1`: u
 
 - [ ] Mover o código para `src/models/load_d1/`: `build_features`, `predict`, `evaluate`, `train`
 - [ ] Escrever testes: features sem nulos, sem datas futuras, saída com as colunas certas
-- [ ] Entregável: PR aprovado no repositório `modelos`, com CI verde
+- [ ] Entregável: PR aprovado no repositório `models`, com CI verde
 
 **Etapa 5 — Ir para produção**
 

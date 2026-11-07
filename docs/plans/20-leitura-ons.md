@@ -5,7 +5,7 @@
 
 ## 1. Objetivo
 
-Baixar o parquet anual de carga diária do bucket público do ONS e normalizá-lo para o formato de `raw.ons_daily_load` (`subsistema`, `data`, `load_avg_mw`).
+Baixar o parquet anual de carga diária do bucket público do ONS e normalizá-lo para o formato de `raw.ons_daily_load` (`subsystem`, `date`, `load_avg_mw`).
 Só leitura e transformação; gravar é o PR 22.
 
 ## 2. Fora do escopo
@@ -22,19 +22,19 @@ Fase 1 — "Ingestão do ONS + backfill desde 2015 + checagens".
 | Caminho | Motivo |
 | --- | --- |
 | `pyproject.toml`, `uv.lock` | `pyarrow` (passo 0; os testes geram parquet com pandas) |
-| `ingestion/ons.py` | `file_url(ano)`, `normalize_load(conteudo: bytes)`, `download_load(cliente, ano, *, base_delay)` |
+| `ingestion/ons.py` | `file_url(year)`, `normalize_load(content: bytes)`, `download_load(client, year, *, base_delay)` |
 | `tests/test_ons_reader.py` | Testes (test-writer) |
 
 Fonte (`docs/plataforma-ml.md`): ONS — Carga de Energia Diária, por subsistema (SE/CO, S, NE, N), em MWmed. Bucket S3 público `ons-aws-prod-opendata`, prefixo `dataset/carga_energia_di/`, sem conta AWS. 1 linha por subsistema por dia.
 
-Código existente: `ingestion/http.py` → `fetch_bytes(cliente, url, params=None, *, tentativas=3, base_delay=1.0)` com retry só para rede/429/5xx (PR 14).
+Código existente: `ingestion/http.py` → `fetch_bytes(client, url, params=None, *, attempts=3, base_delay=1.0)` com retry só para rede/429/5xx (PR 14).
 
 **Valores esperados das colunas** (confirmar com o resultado do item 18; se diferirem, use os do item 18 e anote no PR):
 
 | Coluna no parquet do ONS | Coluna normalizada |
 | --- | --- |
-| `id_subsistema` | `subsistema` |
-| `din_instante` | `data` (só a parte de data) |
+| `id_subsistema` | `subsystem` |
+| `din_instante` | `date` (só a parte de data) |
 | `val_cargaenergiamwmed` | `load_avg_mw` |
 
 Arquivo esperado: `https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/carga_energia_di/CARGA_ENERGIA_<ANO>.parquet`.
@@ -45,9 +45,9 @@ Arquivo esperado: `https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/carga_
 1. (test-writer) Escreva `tests/test_ons_reader.py`. Os testes geram o parquet em memória com um DataFrame no formato da tabela acima (`df.to_parquet(buffer)`) e usam `httpx.MockTransport`; nenhum acesso à rede. Casos na seção 8. Confirme falha por `ModuleNotFoundError: ingestion.ons`. Commit `test: add ons reader tests`.
 2. (implementer) `ingestion/ons.py`:
    - Constantes `BUCKET_URL`, `PREFIXO`, `COLUMN_MAP`, `SUBSISTEMAS = ("SE", "S", "NE", "N")`.
-   - `file_url(ano: int) -> str`.
-   - `normalize_load(conteudo: bytes) -> pd.DataFrame`: lê o parquet, renomeia pelas constantes, converte `data` para `date`, `load_avg_mw` para `float`, mantém só `SUBSISTEMAS` (descarta, por exemplo, um total `SIN` se existir), ordena por (`data`, `subsistema`). Coluna esperada ausente → `ValueError` com o nome da coluna.
-   - `download_load(cliente, ano, *, base_delay=1.0) -> pd.DataFrame`: `fetch_bytes(file_url(ano))` e `normalize_load`.
+   - `file_url(year: int) -> str`.
+   - `normalize_load(content: bytes) -> pd.DataFrame`: lê o parquet, renomeia pelas constantes, converte `date` para `date`, `load_avg_mw` para `float`, mantém só `SUBSISTEMAS` (descarta, por exemplo, um total `SIN` se existir), ordena por (`date`, `subsystem`). Coluna esperada ausente → `ValueError` com o nome da coluna.
+   - `download_load(client, year, *, base_delay=1.0) -> pd.DataFrame`: `fetch_bytes(file_url(year))` e `normalize_load`.
 3. Rode os critérios de pronto e refatore com a suíte verde.
 
 ## 6. Critérios de pronto
@@ -55,7 +55,7 @@ Arquivo esperado: `https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/carga_
 | Comando | Saída esperada |
 | --- | --- |
 | `uv run pytest tests/test_ons_reader.py` | Todos passam, sem rede |
-| `uv run python -c "import httpx; from ingestion.ons import download_load; d=download_load(httpx.Client(timeout=60), 2025); print(sorted(d.subsistema.unique()), len(d))"` (manual, com rede) | `['N', 'NE', 'S', 'SE'] 1460` |
+| `uv run python -c "import httpx; from ingestion.ons import download_load; d=download_load(httpx.Client(timeout=60), 2025); print(sorted(d.subsystem.unique()), len(d))"` (manual, com rede) | `['N', 'NE', 'S', 'SE'] 1460` |
 | `uv run pytest` | Suíte verde |
 | `gh pr checks` | Verde |
 
@@ -65,8 +65,8 @@ Arquivo esperado: `https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/carga_
 
 ## 8. Casos de teste
 
-1. Parquet com 2 dias × 4 subsistemas → 8 linhas com colunas exatamente `subsistema, data, load_avg_mw`.
-2. `din_instante` como timestamp `2026-11-05 00:00:00` → `data = date(2026, 11, 5)`.
+1. Parquet com 2 dias × 4 subsistemas → 8 linhas com colunas exatamente `subsystem, date, load_avg_mw`.
+2. `din_instante` como timestamp `2026-11-05 00:00:00` → `date = date(2026, 11, 5)`.
 3. Parquet com linhas de `SIN` além dos 4 subsistemas → `SIN` descartado.
 4. Parquet sem `val_cargaenergiamwmed` → `ValueError` mencionando a coluna.
 5. `file_url(2015)` termina com `dataset/carga_energia_di/CARGA_ENERGIA_2015.parquet`.

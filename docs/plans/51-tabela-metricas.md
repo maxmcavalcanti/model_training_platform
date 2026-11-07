@@ -23,15 +23,15 @@ Fase 5 — Monitoramento e alertas: "Job de monitoramento + `monitoring.model_me
 | `migrations/versions/0009_monitoring_model_metrics.py` | Tabela; `downgrade` a remove |
 | `tests/test_monitoring_model_metrics.py` | Testes (test-writer) |
 
-Modelo de dados (`docs/plataforma-ml.md`): `monitoring.model_metrics` — `modelo`, `model_version`, `data`, `metrica`, `valor`; chave (`modelo`, `data`, `metrica`); escreve Job de monitoramento (usuário `scorer`); lê Todos.
+Modelo de dados (`docs/plataforma-ml.md`): `monitoring.model_metrics` — `model_name`, `model_version`, `date`, `metric`, `value`; chave (`model_name`, `date`, `metric`); escreve Job de monitoramento (usuário `scorer`); lê Todos.
 
-`data` = a `target_date` avaliada (o dia cujo real foi comparado com a previsão).
+`date` = a `target_date` avaliada (o dia cujo real foi comparado com a previsão).
 
 ## 5. Passos
 
 1. (test-writer) Testes da seção 8 (`@pytest.mark.db`, banco migrado). Confirme falha. Commit `test: add monitoring.model_metrics tests`.
 2. (implementer) `uv run alembic revision -m "monitoring_model_metrics" --rev-id 0009` (ou o próximo livre).
-3. `upgrade`: `monitoring.model_metrics (modelo text not null, model_version text not null, data date not null, metrica text not null check (metrica ~ '^[a-z][a-z0-9_]*$'), valor double precision not null, primary key (modelo, data, metrica))`.
+3. `upgrade`: `monitoring.model_metrics (model_name text not null, model_version text not null, date date not null, metric text not null check (metric ~ '^[a-z][a-z0-9_]*$'), value double precision not null, primary key (model_name, date, metric))`.
 4. `downgrade`: `DROP TABLE monitoring.model_metrics`.
 5. Permissões pelos privilégios padrão (PR 07): `scorer` escreve, todos leem.
 6. Rode os critérios de pronto.
@@ -52,10 +52,10 @@ Modelo de dados (`docs/plataforma-ml.md`): `monitoring.model_metrics` — `model
 ## 8. Casos de teste
 
 1. Inserir (`moving_average`, `1`, 2026-11-07, `mape`, 3.1) funciona.
-2. Mesma (`modelo`, `data`, `metrica`) duas vezes → violação de chave primária.
-3. `metrica = 'MAPE %'` → violação de `CHECK`.
-4. `valor` nulo → violação.
-5. Como `scorer`, `INSERT` e `UPDATE` funcionam; como `ingestor`, `cientista` e `leitura`, só `SELECT`.
+2. Mesma (`model_name`, `date`, `metric`) duas vezes → violação de chave primária.
+3. `metric = 'MAPE %'` → violação de `CHECK`.
+4. `value` nulo → violação.
+5. Como `scorer`, `INSERT` e `UPDATE` funcionam; como `ingestor`, `scientist` e `reader`, só `SELECT`.
 
 ## 9. Riscos e perguntas em aberto
 

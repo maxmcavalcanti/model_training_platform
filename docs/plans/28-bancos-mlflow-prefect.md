@@ -21,7 +21,7 @@ Fase 3 — "MLflow e Prefect no compose" (pré-requisito). O doc diz "atrás do 
 
 | Caminho | Motivo |
 | --- | --- |
-| `ingestion/admin.py` | `ensure_database(admin_url, nome, senha)` |
+| `ingestion/admin.py` | `ensure_database(admin_url, name, password)` |
 | `ingestion/cli.py` | Subcomando `create-databases` que lê `MLFLOW_DB_PASSWORD` e `PREFECT_DB_PASSWORD` e chama `ensure_database` para `mlflow` e `prefect` |
 | `infra/.env.example` | `MLFLOW_DB_PASSWORD`, `PREFECT_DB_PASSWORD` (fictícias) |
 | `tests/test_admin_databases.py` | Testes (test-writer) |
@@ -33,11 +33,11 @@ Por que não migração Alembic: `CREATE DATABASE` não roda dentro de transaç�
 ## 5. Passos
 
 1. (test-writer) Escreva `tests/test_admin_databases.py` (`@pytest.mark.db`), usando nomes únicos por execução (ex.: `mlflow_t<hex>`) para não colidir no servidor de teste, e apagando banco e papel no teardown. Casos na seção 8. Confirme falha por `ModuleNotFoundError: ingestion.admin`. Commit `test: add database bootstrap tests`.
-2. (implementer) `ingestion/admin.py`, `ensure_database(admin_url: str, nome: str, senha: str) -> None`, com conexão `AUTOCOMMIT`:
-   - Valida `nome` com `^[a-z_][a-z0-9_]*$` (vai em SQL como identificador); inválido → `ValueError`.
-   - Cria o papel `nome` com `LOGIN PASSWORD` se não existir; se existir, `ALTER ROLE ... PASSWORD` (permite trocar a senha rodando de novo). Senha passada como literal com `quote_literal` do psycopg (`psycopg.sql.Literal`), nunca por f-string.
-   - Cria o banco `nome` com `OWNER nome` se não existir.
-   - `REVOKE CONNECT ON DATABASE nome FROM PUBLIC`.
+2. (implementer) `ingestion/admin.py`, `ensure_database(admin_url: str, name: str, password: str) -> None`, com conexão `AUTOCOMMIT`:
+   - Valida `name` com `^[a-z_][a-z0-9_]*$` (vai em SQL como identificador); inválido → `ValueError`.
+   - Cria o papel `name` com `LOGIN PASSWORD` se não existir; se existir, `ALTER ROLE ... PASSWORD` (permite trocar a senha rodando de novo). Senha passada como literal com `quote_literal` do psycopg (`psycopg.sql.Literal`), nunca por f-string.
+   - Cria o banco `name` com `OWNER name` se não existir.
+   - `REVOKE CONNECT ON DATABASE name FROM PUBLIC`.
 3. CLI `create-databases`: usa `DATABASE_URL_ADMIN`; senha ausente → mensagem citando a variável e código 1.
 4. `infra/.env.example`: acrescente as duas variáveis.
 5. Rode os critérios de pronto.
@@ -62,7 +62,7 @@ Por que não migração Alembic: `CREATE DATABASE` não roda dentro de transaç�
 3. Rodar de novo com senha nova → conectar com a senha nova funciona e com a antiga falha.
 4. O papel criado conecta no próprio banco e consegue `CREATE TABLE` nele.
 5. O papel criado **não** conecta no banco `ml` (de teste) nem no banco do outro serviço.
-6. `nome = "x; drop"` → `ValueError`, nada executado.
+6. `name = "x; drop"` → `ValueError`, nada executado.
 7. Senha com aspas simples (`a'b`) funciona.
 8. CLI sem `PREFECT_DB_PASSWORD` → código 1 e stderr contém `PREFECT_DB_PASSWORD`.
 

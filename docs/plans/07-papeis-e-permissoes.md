@@ -5,7 +5,7 @@
 
 ## 1. Objetivo
 
-Criar, por migração Alembic, os papéis `ingestor`, `cientista`, `scorer` e `leitura` e as permissões por schema, incluindo privilégios padrão para tabelas que migrações futuras criarem.
+Criar, por migração Alembic, os papéis `ingestor`, `scientist`, `scorer` e `reader` e as permissões por schema, incluindo privilégios padrão para tabelas que migrações futuras criarem.
 Assim cada tabela nova já nasce com quem escreve e quem lê corretos, sem `GRANT` manual.
 
 ## 2. Fora do escopo
@@ -27,7 +27,7 @@ Fase 1 — "Postgres, migrações com Alembic, usuários e permissões" (parte "
 
 Regra e modelo de dados (de `.claude/rules/migrations-e-dados.md` e `docs/plataforma-ml.md`):
 
-> Permissões por usuário do Postgres: `ingestor` escreve `raw` e `ref`; `cientista` escreve `features`; `scorer` escreve `predictions` e `monitoring`; `leitura` só lê. Toda tabela nova declara quem escreve e quem lê.
+> Permissões por usuário do Postgres: `ingestor` escreve `raw` e `ref`; `scientist` escreve `features`; `scorer` escreve `predictions` e `monitoring`; `reader` só lê. Toda tabela nova declara quem escreve e quem lê.
 
 Na tabela do modelo de dados, a coluna "Lê" é "Todos" para todas as tabelas.
 
@@ -38,10 +38,10 @@ Na tabela do modelo de dados, a coluna "Lê" é "Todos" para todas as tabelas.
 3. `upgrade`:
    - Para cada papel, crie com `LOGIN` se não existir (papéis são globais ao servidor):
      `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ingestor') THEN CREATE ROLE ingestor LOGIN; END IF; END $$;`
-   - `GRANT USAGE ON SCHEMA raw, ref, features, predictions, monitoring TO ingestor, cientista, scorer, leitura;`
-   - Leitura geral: para cada schema, `GRANT SELECT ON ALL TABLES IN SCHEMA <s> TO ingestor, cientista, scorer, leitura;` e `ALTER DEFAULT PRIVILEGES IN SCHEMA <s> GRANT SELECT ON TABLES TO ingestor, cientista, scorer, leitura;`
+   - `GRANT USAGE ON SCHEMA raw, ref, features, predictions, monitoring TO ingestor, scientist, scorer, reader;`
+   - Leitura geral: para cada schema, `GRANT SELECT ON ALL TABLES IN SCHEMA <s> TO ingestor, scientist, scorer, reader;` e `ALTER DEFAULT PRIVILEGES IN SCHEMA <s> GRANT SELECT ON TABLES TO ingestor, scientist, scorer, reader;`
    - Escrita: `ALTER DEFAULT PRIVILEGES IN SCHEMA raw, ref GRANT INSERT, UPDATE ON TABLES TO ingestor;` (mais o `GRANT` equivalente em `ALL TABLES` já existentes). Idem `predictions, monitoring` para `scorer`.
-   - `features`: `GRANT CREATE ON SCHEMA features TO cientista;` e `ALTER DEFAULT PRIVILEGES FOR ROLE cientista IN SCHEMA features GRANT SELECT ON TABLES TO ingestor, scorer, leitura;` (tabelas que ela criar ficam legíveis por todos).
+   - `features`: `GRANT CREATE ON SCHEMA features TO scientist;` e `ALTER DEFAULT PRIVILEGES FOR ROLE scientist IN SCHEMA features GRANT SELECT ON TABLES TO ingestor, scorer, reader;` (tabelas que ela criar ficam legíveis por todos).
    - Sem `DELETE` para ninguém: os jobs fazem upsert, nunca apagam.
 4. `downgrade`: revogue tudo o que o `upgrade` concedeu neste banco (inclusive os privilégios padrão, com `ALTER DEFAULT PRIVILEGES ... REVOKE`). **Não** apague os papéis: eles são do servidor e podem ter privilégios em outros bancos; `DROP ROLE` falharia. Documente isso num comentário no topo do arquivo.
 5. Rode os critérios de pronto.
@@ -68,16 +68,16 @@ Em todos, a tabela `x` foi criada pelo admin **depois** da migração (cobre os 
 1. `ingestor`: `INSERT` e `UPDATE` em `raw.x` e `ref.x` funcionam; `INSERT` em `predictions.x` falha com `permission denied`.
 2. `ingestor`: `DELETE FROM raw.x` falha com `permission denied`.
 3. `scorer`: `INSERT` em `predictions.x` e `monitoring.x` funciona; `INSERT` em `raw.x` falha.
-4. `leitura`: `SELECT` em `raw.x`, `ref.x`, `predictions.x`, `monitoring.x` funciona; qualquer `INSERT` falha.
-5. `cientista`: `CREATE TABLE features.mine (id int)` funciona; depois disso, `leitura` e `scorer` conseguem `SELECT` em `features.mine`.
-6. `cientista`: `CREATE TABLE raw.y (id int)` falha; `INSERT` em `raw.x` falha.
+4. `reader`: `SELECT` em `raw.x`, `ref.x`, `predictions.x`, `monitoring.x` funciona; qualquer `INSERT` falha.
+5. `scientist`: `CREATE TABLE features.mine (id int)` funciona; depois disso, `reader` e `scorer` conseguem `SELECT` em `features.mine`.
+6. `scientist`: `CREATE TABLE raw.y (id int)` falha; `INSERT` em `raw.x` falha.
 7. Nenhum dos quatro papéis consegue `CREATE TABLE` em `raw`, `ref`, `predictions` ou `monitoring`.
 8. Rodar `upgrade head` num segundo banco do mesmo servidor (papéis já existem) não falha.
 
 ## 9. Riscos e perguntas em aberto
 
 - `ALTER DEFAULT PRIVILEGES` vale para objetos criados pelo papel que rodou a migração. As migrações devem rodar sempre com o mesmo usuário admin (`DATABASE_URL_ADMIN`); se isso mudar, as tabelas novas nascem sem permissão. Registrar isso no AGENTS.md não cabe aqui (é regra de operação); fica como risco.
-- `ALTER DEFAULT PRIVILEGES FOR ROLE cientista` exige que o admin seja superusuário ou membro de `cientista`. Na VPS, o admin é o `POSTGRES_USER` da imagem (superusuário).
+- `ALTER DEFAULT PRIVILEGES FOR ROLE scientist` exige que o admin seja superusuário ou membro de `scientist`. Na VPS, o admin é o `POSTGRES_USER` da imagem (superusuário).
 - O `scorer` também precisará ler o MLflow e escrever no Prefect, mas isso é outro banco (Fase 3).
 
 ## 10. Decisões que exigem ADR

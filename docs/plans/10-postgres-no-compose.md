@@ -53,7 +53,7 @@ Atenção (está no item 02): porta publicada pelo Docker passa por cima do ufw.
 | --- | --- |
 | `uv run pytest tests/infra/test_compose.py` | Todos passam |
 | `docker compose -f infra/docker-compose.yml --env-file infra/.env.example config -q` | Sem saída, código 0 |
-| `docker compose -f infra/docker-compose.yml --env-file infra/.env.example up -d --wait postgres` (localmente, com o compose de dev parado) | `Container plataforma-postgres-1  Healthy` |
+| `docker compose -f infra/docker-compose.yml --env-file infra/.env.example up -d --wait postgres` (localmente, com o compose de dev parado) | `Container platform-postgres-1  Healthy` |
 | `docker compose -f infra/docker-compose.yml --env-file infra/.env.example exec postgres psql -U platform_admin -d ml -c "select 1"` | Uma linha com `1` |
 | `uv run pytest` | Suíte verde |
 | `gh pr checks` | Verde, com o passo de smoke do compose |

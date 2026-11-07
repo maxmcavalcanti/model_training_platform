@@ -8,11 +8,11 @@
 Na VPS, como `deploy`, em `/opt/platform`:
 
 - [ ] `git pull`.
-- [ ] `docker compose -f infra/docker-compose.yml build jobs agendador`.
+- [ ] `docker compose -f infra/docker-compose.yml build jobs scheduler`.
 - [ ] Migrar: `docker compose -f infra/docker-compose.yml run --rm jobs alembic upgrade head`.
 - [ ] Rodar uma vez à mão para não esperar o dia seguinte: `docker compose -f infra/docker-compose.yml run --rm jobs python -m ingestion weather-forecast; echo $?` → `0`.
-- [ ] Subir o agendador: `docker compose -f infra/docker-compose.yml up -d agendador`.
-- [ ] `docker compose -f infra/docker-compose.yml logs agendador | head` mostra o supercronic lendo o crontab sem erro.
+- [ ] Subir o agendador: `docker compose -f infra/docker-compose.yml up -d scheduler`.
+- [ ] `docker compose -f infra/docker-compose.yml logs scheduler | head` mostra o supercronic lendo o crontab sem erro.
 
 ## Verificação de pronto (no dia)
 
@@ -27,7 +27,7 @@ Na VPS, como `deploy`, em `/opt/platform`:
 
 - [ ] Todo dia, depois das 06:35 BRT, rodar a consulta abaixo. Se faltar o dia, rodar o job à mão (`run --rm jobs python -m ingestion weather-forecast`) no mesmo dia, antes da meia-noite, para salvar o snapshot:
   `select issued_at, count(*) from raw.weather_forecast where issued_at > current_date - 8 group by 1 order by 1`
-- [ ] Teste de reboot: depois de um `sudo reboot`, `docker compose -f infra/docker-compose.yml ps agendador` mostra `Up` sem intervenção.
+- [ ] Teste de reboot: depois de um `sudo reboot`, `docker compose -f infra/docker-compose.yml ps scheduler` mostra `Up` sem intervenção.
 
 ## Critério de pronto da Fase 2 para a previsão
 

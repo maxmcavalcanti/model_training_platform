@@ -12,7 +12,7 @@ Criar bot e bucket exige contas externas; instalar units systemd e testar restor
 - [ ] Criar o bot com o @BotFather (`/newbot`), guardar o token.
 - [ ] Mandar uma mensagem ao bot (ou criar um grupo e adicioná-lo) e obter o `chat_id`: `curl -s https://api.telegram.org/bot<token>/getUpdates`.
 - [ ] Na VPS, `infra/.env`: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Reaplicar o último deploy (`gh run rerun <id>` do `deploy.yml`).
-- [ ] Teste de ponta a ponta: na UI do Prefect, disparar `ingest_ons_load/producao` com `inicio` depois de `fim` (falha de propósito) → chega mensagem no Telegram com o nome do flow e o link.
+- [ ] Teste de ponta a ponta: na UI do Prefect, disparar `ingest_ons_load/production` com `start` depois de `end` (falha de propósito) → chega mensagem no Telegram com o nome do flow e o link.
 
 ## Checklist — backup
 

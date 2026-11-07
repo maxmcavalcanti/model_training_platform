@@ -25,7 +25,7 @@ Fase 5 — "Job de monitoramento + `monitoring.model_metrics`".
 | `tests/fixtures/fake_models/src/models/fake_model/__init__.py` | Acrescentar `load_actuals` e `evaluate` (test-writer) |
 | `tests/test_monitor_one.py` | Teste de ponta a ponta com executor, banco e módulo falso (test-writer) |
 
-O contrato do doc tem três funções; ele não diz de onde vem o `real`. Opção recomendada para o ADR (P14): uma quarta função **opcional por modelo**, no módulo dela:
+O contrato do doc tem três funções; ele não diz de onde vem o `actual`. Opção recomendada para o ADR (P14): uma quarta função **opcional por modelo**, no módulo dela:
 
 ```python
 def load_actuals(conn, target_date: date) -> pd.DataFrame: ...
@@ -38,11 +38,11 @@ Código existente: `flows/monitor.py` (`evaluate_day`, `ActualsUnavailable`, `In
 
 ## 5. Passos
 
-1. (test-writer) Acrescente ao pacote falso `load_actuals(conn, target_date)` (lê de uma tabela de teste ou devolve vazio para datas recentes) e `evaluate` (MAE simples). Escreva os testes da seção 8, via `executar(build_command(...))` com `MODELS_LOCAL_SOURCE`. Confirme falha. Commit `test: add single-model monitor entrypoint tests`.
+1. (test-writer) Acrescente ao pacote falso `load_actuals(conn, target_date)` (lê de uma tabela de teste ou devolve vazio para datas recentes) e `evaluate` (MAE simples). Escreva os testes da seção 8, via `run(build_command(...))` com `MODELS_LOCAL_SOURCE`. Confirme falha. Commit `test: add single-model monitor entrypoint tests`.
 2. (implementer) `flows/monitor_one.py`:
    - Argumentos: `--model NOME --today AAAA-MM-DD [--days 14]`. Variável `DATABASE_URL_SCORER` obrigatória (código 2 sem ela).
-   - `modulo = importlib.import_module(f"modelos.{nome}")`; sem `load_actuals` → mensagem "modelo <nome> não define load_actuals" e código 1.
-   - Para cada `target_date` de `hoje - dias` até `hoje - 1`, numa transação própria: `evaluate_day(conn, nome=..., modulo=modulo, target_date=d, get_actuals=modulo.load_actuals)`; `ActualsUnavailable` → registra "real de <d> ainda não chegou" e segue; outras exceções sobem.
+   - `module = importlib.import_module(f"models.{name}")`; sem `load_actuals` → mensagem "modelo <nome> não define load_actuals" e código 1.
+   - Para cada `target_date` de `today - days` até `today - 1`, numa transação própria: `evaluate_day(conn, name=..., module=module, target_date=d, get_actuals=module.load_actuals)`; `ActualsUnavailable` → registra "real de <d> ainda não chegou" e segue; outras exceções sobem.
    - Imprime um resumo (`dias avaliados: N, sem real: M`) e devolve 0.
 3. Rode os critérios de pronto.
 
@@ -72,4 +72,4 @@ Código existente: `flows/monitor.py` (`evaluate_day`, `ActualsUnavailable`, `In
 
 ## 10. Decisões que exigem ADR
 
-- ADR "Fonte do real no monitoramento" (P14): `load_actuals` no módulo dela (recomendado) ou mapa na plataforma; formato `chave, target_date, actual_value`. É mudança de contrato (`AGENTS.md`: assinatura das funções só muda por ADR) e precisa da concordância dela.
+- ADR "Fonte do real no monitoramento" (P14): `load_actuals` no módulo dela (recomendado) ou mapa na plataforma; formato `key, target_date, actual_value`. É mudança de contrato (`AGENTS.md`: assinatura das funções só muda por ADR) e precisa da concordância dela.

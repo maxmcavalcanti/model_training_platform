@@ -32,8 +32,8 @@ Do notebook (na tailnet):
 
 | Comando | Saída esperada |
 | --- | --- |
-| `curl -s https://<host>.ts.net:8080/saude` | `ok` |
-| `curl -sv https://<host>.ts.net:8080/saude 2>&1 \| grep "SSL certificate verify ok"` | Uma linha (certificado `*.ts.net` válido) |
+| `curl -s https://<host>.ts.net:8080/health` | `ok` |
+| `curl -sv https://<host>.ts.net:8080/health 2>&1 \| grep "SSL certificate verify ok"` | Uma linha (certificado `*.ts.net` válido) |
 
 Na VPS (nada escuta na internet):
 
@@ -47,13 +47,13 @@ De fora da tailnet (ex.: celular no 4G, sem Tailscale):
 
 | Comando | Saída esperada |
 | --- | --- |
-| `curl -s --max-time 5 http://<ip-publico>:8080/saude` | Falha (timeout ou conexão recusada) |
+| `curl -s --max-time 5 http://<ip-publico>:8080/health` | Falha (timeout ou conexão recusada) |
 | `nc -zv -w 5 <ip-publico> 22` | Falha |
 
 Teste de reboot (critério da Fase 0):
 
 - [ ] `sudo reboot` na VPS.
-- [ ] Sem entrar na VPS, depois de 2 minutos, do notebook: `curl -s https://<host>.ts.net:8080/saude` devolve `ok` (prova que o Docker, o container e a configuração do `tailscale serve` voltaram sozinhos).
-- [ ] Na VPS: `docker compose -f /opt/platform/infra/docker-compose.yml ps` mostra `saude` com `Up (healthy)`; `tailscale serve status` mostra o mapeamento; `swapon --show` mostra o swap de 2 GB.
+- [ ] Sem entrar na VPS, depois de 2 minutos, do notebook: `curl -s https://<host>.ts.net:8080/health` devolve `ok` (prova que o Docker, o container e a configuração do `tailscale serve` voltaram sozinhos).
+- [ ] Na VPS: `docker compose -f /opt/platform/infra/docker-compose.yml ps` mostra `health` com `Up (healthy)`; `tailscale serve status` mostra o mapeamento; `swapon --show` mostra o swap de 2 GB.
 
 Se o reboot exigir qualquer intervenção (inclusive rodar de novo o `tailscale-serve.sh`), a Fase 0 não está pronta: anote o que foi preciso e devolva para o planejamento.

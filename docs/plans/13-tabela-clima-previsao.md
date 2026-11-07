@@ -75,12 +75,12 @@ Por que existe (do doc): "O modelo de carga só pode usar, no dia D, a previsão
 5. `target_date` anterior a `issued_at` → violação de `CHECK`.
 6. `target_date` 17 dias depois de `issued_at` → violação de `CHECK`.
 7. Tentar informar `horizon_days` no `INSERT` → erro (coluna gerada).
-8. Como `ingestor`, `INSERT` funciona; como `leitura` e `cientista`, só `SELECT`.
+8. Como `ingestor`, `INSERT` funciona; como `reader` e `scientist`, só `SELECT`.
 9. `downgrade` até `0003` remove a tabela; `ref.locations` continua.
 
 ## 9. Riscos e perguntas em aberto
 
-- P8: `issued_at` como `date` segue o doc ("`issued_at` = hoje"). Alternativa: `timestamptz` com a hora da coleta, que permitiria mais de um snapshot por dia. Com `date`, uma segunda execução no mesmo dia não cria snapshot novo (o PR 15 usa `ignorar` no conflito e preserva o primeiro). Decidir antes do merge; mudar depois exige migração de contrato.
+- P8: `issued_at` como `date` segue o doc ("`issued_at` = hoje"). Alternativa: `timestamptz` com a hora da coleta, que permitiria mais de um snapshot por dia. Com `date`, uma segunda execução no mesmo dia não cria snapshot novo (o PR 15 usa `ignore` no conflito e preserva o primeiro). Decidir antes do merge; mudar depois exige migração de contrato.
 - Coluna gerada é proposta deste plano: garante que `horizon_days` nunca fique inconsistente. O job do PR 15 não envia essa coluna.
 
 ## 10. Decisões que exigem ADR

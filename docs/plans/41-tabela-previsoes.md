@@ -27,15 +27,15 @@ Modelo de dados (`docs/plataforma-ml.md`):
 
 | Tabela | Colunas principais | Chave | Escreve | Lê |
 | --- | --- | --- | --- | --- |
-| `predictions.model_predictions` | `modelo`, `model_version`, `chave`, `target_date`, `predicted_value`, `generated_at` | (`modelo`, `chave`, `target_date`, `generated_at`) | Job de score | Todos |
+| `predictions.model_predictions` | `model_name`, `model_version`, `key`, `target_date`, `predicted_value`, `generated_at` | (`model_name`, `key`, `target_date`, `generated_at`) | Job de score | Todos |
 
-"`chave` é o que o modelo prevê: o subsistema no modelo de carga, o `location_id` no de chuva. Assim uma única tabela de previsões serve a todos os modelos."
+"`key` é o que o modelo prevê: o subsistema no modelo de carga, o `location_id` no de chuva. Assim uma única tabela de previsões serve a todos os modelos."
 
 ## 5. Passos
 
 1. (test-writer) Testes da seção 8 (`@pytest.mark.db`, banco migrado). Confirme falha porque a tabela não existe. Commit `test: add predictions.model_predictions tests`.
 2. (implementer) `uv run alembic revision -m "predictions_model_predictions" --rev-id 0008` (ou o próximo livre).
-3. `upgrade`: `predictions.model_predictions (modelo text not null, model_version text not null, chave text not null, target_date date not null, predicted_value double precision not null, generated_at timestamptz not null, primary key (modelo, chave, target_date, generated_at))` e um índice em (`modelo`, `target_date`) para os painéis e o monitoramento.
+3. `upgrade`: `predictions.model_predictions (model_name text not null, model_version text not null, key text not null, target_date date not null, predicted_value double precision not null, generated_at timestamptz not null, primary key (model_name, key, target_date, generated_at))` e um índice em (`model_name`, `target_date`) para os painéis e o monitoramento.
 4. `downgrade`: `DROP TABLE predictions.model_predictions`.
 5. Permissões pelos privilégios padrão (PR 07): `scorer` escreve, todos leem.
 6. Rode os critérios de pronto.
@@ -56,10 +56,10 @@ Modelo de dados (`docs/plataforma-ml.md`):
 ## 8. Casos de teste
 
 1. Inserir uma previsão (`load_d1`, `3`, `SE`, 2026-11-08, 41000.0, now()) funciona.
-2. Mesma (`modelo`, `chave`, `target_date`) com `generated_at` diferente → duas linhas coexistem.
+2. Mesma (`model_name`, `key`, `target_date`) com `generated_at` diferente → duas linhas coexistem.
 3. Mesma chave completa duas vezes → violação de chave primária.
 4. `predicted_value` nulo → violação de `NOT NULL`.
-5. Como `scorer`, `INSERT` funciona; como `ingestor`, `cientista` e `leitura`, `INSERT` falha e `SELECT` funciona.
+5. Como `scorer`, `INSERT` funciona; como `ingestor`, `scientist` e `reader`, `INSERT` falha e `SELECT` funciona.
 
 ## 9. Riscos e perguntas em aberto
 

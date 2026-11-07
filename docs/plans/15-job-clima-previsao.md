@@ -24,15 +24,15 @@ Fase 2 — "`raw.weather_forecast` coletando todo dia (prioridade)".
 | Caminho | Motivo |
 | --- | --- |
 | `pyproject.toml`, `uv.lock` | `pandera` |
-| `ingestion/checks.py` | `CheckFailed`, `checar(df, schema, expected_rows=None)` e `SCHEMA_WEATHER_FORECAST` |
-| `ingestion/jobs.py` | `list_locations(conn)` e `ingest_weather_forecast(engine, cliente, hoje)` |
+| `ingestion/checks.py` | `CheckFailed`, `check(df, schema, expected_rows=None)` e `SCHEMA_WEATHER_FORECAST` |
+| `ingestion/jobs.py` | `list_locations(conn)` e `ingest_weather_forecast(engine, client, today)` |
 | `ingestion/cli.py` | Subcomando `weather-forecast` |
 | `tests/test_checks_weather_forecast.py`, `tests/test_job_weather_forecast.py` | Testes (test-writer) |
 
 Código existente que este PR usa (leia antes):
 
-- `ingestion/db.py`: `build_engine()`, `upsert(conn, tabela, linhas, chaves, *, on_conflict, stamp_ingested_at)` (PR 08).
-- `ingestion/openmeteo.py`: `Local`, `fetch_forecast(cliente, local, issued_at, dias=7, *, base_delay)` (PR 14).
+- `ingestion/db.py`: `build_engine()`, `upsert(conn, table, rows, keys, *, on_conflict, stamp_ingested_at)` (PR 08).
+- `ingestion/openmeteo.py`: `Location`, `fetch_forecast(client, location, issued_at, days=7, *, base_delay)` (PR 14).
 - `ingestion/cli.py`: registro `SUBCOMMANDS` e códigos de saída 0/1/2 (PR 11).
 
 Regras (`.claude/rules/migrations-e-dados.md`):
@@ -44,22 +44,22 @@ Checagem (`docs/plataforma-ml.md`): "linhas esperadas por dia, sem nulos nas col
 
 ## 5. Passos
 
-1. (test-writer) Escreva os testes da seção 8. Os do job usam `migrated_database` (`@pytest.mark.db`), `httpx.MockTransport` que responde com a fixture `tests/fixtures/openmeteo_forecast_sao_paulo.json` (ajustando `latitude`/`longitude` não é preciso: o local vem do parâmetro) e `hoje` fixo igual ao primeiro dia da fixture. Confirme falha por `ModuleNotFoundError: ingestion.checks`. Commit `test: add weather-forecast job tests`.
+1. (test-writer) Escreva os testes da seção 8. Os do job usam `migrated_database` (`@pytest.mark.db`), `httpx.MockTransport` que responde com a fixture `tests/fixtures/openmeteo_forecast_sao_paulo.json` (ajustando `latitude`/`longitude` não é preciso: o local vem do parâmetro) e `today` fixo igual ao primeiro dia da fixture. Confirme falha por `ModuleNotFoundError: ingestion.checks`. Commit `test: add weather-forecast job tests`.
 2. (implementer) `uv add pandera`. Use o caminho de import recomendado pela versão instalada (nas versões recentes, `import pandera.pandas as pa`).
 3. `ingestion/checks.py`:
    - `class CheckFailed(RuntimeError)`.
-   - `checar(df, schema, expected_rows: int | None = None) -> None`: valida com `schema.validate(df, lazy=True)`; se `expected_rows` for dado e diferente de `len(df)`, falha. Toda falha vira `CheckFailed` com mensagem legível (quais colunas/linhas).
+   - `check(df, schema, expected_rows: int | None = None) -> None`: valida com `schema.validate(df, lazy=True)`; se `expected_rows` for dado e diferente de `len(df)`, falha. Toda falha vira `CheckFailed` com mensagem legível (quais colunas/linhas).
    - `SCHEMA_WEATHER_FORECAST`: `location_id`, `issued_at`, `target_date` não nulos; `horizon_days` entre 1 e 7; `temp_max` e `temp_min` entre −10 e 50 (nulos permitidos); `precip_mm` ≥ 0; `wind_speed_max` ≥ 0; `humidity_mean` entre 0 e 100; checagem de DataFrame `temp_min <= temp_max` onde ambos existem; unicidade de (`location_id`, `issued_at`, `target_date`).
 4. `ingestion/jobs.py`:
-   - `list_locations(conn) -> list[Local]` lendo `ref.locations` ordenado por `location_id`.
-   - `ingest_weather_forecast(engine, cliente, hoje: date, *, base_delay=1.0) -> None`:
+   - `list_locations(conn) -> list[Location]` lendo `ref.locations` ordenado por `location_id`.
+   - `ingest_weather_forecast(engine, client, today: date, *, base_delay=1.0) -> None`:
      1. Lê os locais.
      2. Para cada local, chama `fetch_forecast`. Se um local falhar, registra o erro e **continua** com os outros (cada local que falha é histórico perdido; os outros não devem pagar por ele).
-     3. Grava o que deu certo com `upsert(..., "raw.weather_forecast", chaves=["location_id", "issued_at", "target_date"], on_conflict="ignorar")`, numa transação.
-     4. Relê `raw.weather_forecast` com `issued_at = hoje` e roda `checar(df, SCHEMA_WEATHER_FORECAST, expected_rows=len(locais) * 7)`.
+     3. Grava o que deu certo com `upsert(..., "raw.weather_forecast", keys=["location_id", "issued_at", "target_date"], on_conflict="ignore")`, numa transação.
+     4. Relê `raw.weather_forecast` com `issued_at = today` e roda `check(df, SCHEMA_WEATHER_FORECAST, expected_rows=len(locations) * 7)`.
      5. Se algum local falhou no passo 2, levanta `RuntimeError` listando os locais, **depois** de gravar os demais.
    - Não há parâmetro de data: a API só devolve a previsão atual, então não existe reprocessar um dia passado. Reexecutar no mesmo dia completa locais que faltaram e não muda os que já existem.
-5. `ingestion/cli.py`: subcomando `weather-forecast`, sem argumentos; usa `build_engine()`, `httpx.Client(timeout=30)` e `hoje = datetime.now(ZoneInfo("America/Sao_Paulo")).date()`. `CheckFailed` ou qualquer exceção → código 1.
+5. `ingestion/cli.py`: subcomando `weather-forecast`, sem argumentos; usa `build_engine()`, `httpx.Client(timeout=30)` e `today = datetime.now(ZoneInfo("America/Sao_Paulo")).date()`. `CheckFailed` ou qualquer exceção → código 1.
 6. Rode os critérios de pronto e refatore com a suíte verde.
 
 ## 6. Critérios de pronto
@@ -90,7 +90,7 @@ Checagem:
 7. `temp_max` nulo (valor ausente na fonte) → não levanta.
 
 Job (banco com os 4 locais do PR 09):
-8. Primeira execução → 28 linhas com `issued_at = hoje`, horizontes 1 a 7 para cada local; sem exceção.
+8. Primeira execução → 28 linhas com `issued_at = today`, horizontes 1 a 7 para cada local; sem exceção.
 9. Segunda execução no mesmo dia, com a API devolvendo temperaturas diferentes → continua 28 linhas e os valores são os da **primeira** execução.
 10. Execução no dia seguinte → 56 linhas; os snapshots do dia anterior intactos.
 11. API falha (503 nas 3 tentativas) só para `recife` → 21 linhas gravadas e o job levanta erro que menciona `recife`. (A checagem de linhas também acusaria; o erro deve citar o local.)

@@ -12,7 +12,7 @@ Decisão do usuário (2026-11-07): a VPS tem 1 vCPU, 1 GB de RAM, 25 GB de SSD e
 | Serviço | Estimativa de RAM | `mem_limit` inicial nos specs | Onde entra |
 | --- | --- | --- | --- |
 | Postgres | 100–250 MB | `256m` | PR 10 |
-| Job de ingestão com pandas (pico) | 200–400 MB | `512m` (`jobs` e `agendador`) | PRs 11 e 16 |
+| Job de ingestão com pandas (pico) | 200–400 MB | `512m` (`jobs` e `scheduler`) | PRs 11 e 16 |
 | Tailscale (no host, fora do compose) | ~30 MB | — | item 02 |
 | MLflow | 300–500 MB | `512m` | PR 29 |
 | Prefect server + worker | 500–800 MB | `640m` (server) + `384m` (worker) | PRs 30 e 34 |

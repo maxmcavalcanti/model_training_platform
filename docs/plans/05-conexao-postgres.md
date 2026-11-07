@@ -11,7 +11,7 @@ Todos os PRs com banco a partir daqui usam o marcador `db` e a fixture criada aq
 ## 2. Fora do escopo
 
 - Alembic, schemas, tabelas (PR 06).
-- Usuários `ingestor`, `cientista`, `scorer`, `leitura` (PR 07).
+- Usuários `ingestor`, `scientist`, `scorer`, `reader` (PR 07).
 - Postgres na VPS (PR 10).
 
 ## 3. Fase do roadmap
@@ -39,10 +39,10 @@ Fase 1 — Banco e carga do ONS: "Postgres, migrações com Alembic, usuários e
    - Fixture de sessão `temp_database_url` que cria `ml_test_<8 hex aleatórios>` com `AUTOCOMMIT`, devolve a URL do banco novo e, no fim, faz `DROP DATABASE ... WITH (FORCE)`.
    - Se o servidor não responder, a fixture **falha** (não pula) com a mensagem: `Postgres de teste indisponível: rode docker compose -f infra/docker-compose.dev.yml up -d`.
    - Escreva `tests/test_db.py` com os casos da seção 8, marcados `@pytest.mark.db` os que usam banco.
-   - Atualize `tests/infra/test_compose.py`: lista de serviços com porta permitida passa a ser `saude`, `postgres`.
+   - Atualize `tests/infra/test_compose.py`: lista de serviços com porta permitida passa a ser `health`, `postgres`.
    - Rode `uv run pytest tests/test_db.py` e confirme falha por `ModuleNotFoundError: ingestion.db` (comportamento ausente). Commit `test: add db connection tests`.
 2. (implementer) Crie `infra/docker-compose.dev.yml`:
-   - `name: plataforma-dev`; serviço `postgres`, imagem `postgres:16.<minor>` (fixe a minor atual), `restart: unless-stopped`, `mem_limit: 512m` (o teste geral do PR 03 exige `mem_limit` em todo compose, inclusive o de dev), `environment: POSTGRES_PASSWORD: ${POSTGRES_DEV_PASSWORD:-postgres}`, `ports: ["${DEV_BIND_IP:-127.0.0.1}:5432:5432"]`, `healthcheck` com `pg_isready -U postgres`.
+   - `name: platform-dev`; serviço `postgres`, imagem `postgres:16.<minor>` (fixe a minor atual), `restart: unless-stopped`, `mem_limit: 512m` (o teste geral do PR 03 exige `mem_limit` em todo compose, inclusive o de dev), `environment: POSTGRES_PASSWORD: ${POSTGRES_DEV_PASSWORD:-postgres}`, `ports: ["${DEV_BIND_IP:-127.0.0.1}:5432:5432"]`, `healthcheck` com `pg_isready -U postgres`.
 3. Crie `ingestion/db.py` com:
    - `class MissingConfiguration(RuntimeError)`.
    - `def build_engine(url: str | None = None) -> sqlalchemy.Engine`: usa `url` ou a variável `DATABASE_URL`; se nenhuma, levanta `MissingConfiguration("DATABASE_URL não definida")`; se a URL começar com `postgresql://`, troca para `postgresql+psycopg://`; `pool_pre_ping=True`.
@@ -56,7 +56,7 @@ Fase 1 — Banco e carga do ONS: "Postgres, migrações com Alembic, usuários e
 
 | Comando | Saída esperada |
 | --- | --- |
-| `docker compose -f infra/docker-compose.dev.yml up -d --wait` | `Container plataforma-dev-postgres-1  Healthy` |
+| `docker compose -f infra/docker-compose.dev.yml up -d --wait` | `Container platform-dev-postgres-1  Healthy` |
 | `uv run pytest tests/test_db.py` | Todos passam |
 | `uv run pytest -m "not db"` | Passa sem Postgres rodando |
 | `uv run pytest` | Suíte verde |

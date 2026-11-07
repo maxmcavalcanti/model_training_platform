@@ -14,13 +14,13 @@ Fazer o compose de produção usar essas imagens, para a VPS só precisar de `pu
 
 ## 3. Fase do roadmap
 
-Fase 3 — "Pipelines do GitHub Actions nos dois repositórios" (lado `plataforma`, parte build → GHCR).
+Fase 3 — "Pipelines do GitHub Actions nos dois repositórios" (lado `platform`, parte build → GHCR).
 
 ## 4. Arquivos a criar ou alterar
 
 | Caminho | Motivo |
 | --- | --- |
-| `.github/workflows/deploy.yml` | Job `imagens`: login no GHCR com `GITHUB_TOKEN`, build e push |
+| `.github/workflows/deploy.yml` | Job `images`: login no GHCR com `GITHUB_TOKEN`, build e push |
 | `infra/docker-compose.yml` | `image: ghcr.io/${GHCR_OWNER}/platform-jobs:${IMAGE_TAG}` em `jobs`, `prefect-worker`; idem `platform-mlflow` em `mlflow`. Mantém `build:` para uso local |
 | `infra/.env.example` | `GHCR_OWNER`, `IMAGE_TAG=main` |
 | `.github/workflows/ci.yml` | Passo `actionlint` para validar os workflows |
@@ -36,7 +36,7 @@ Regra (`.claude/rules/infra.md`): "Deploy só sai de merge na `main`. Nada de SS
    - `on: push: branches: [main]` e `workflow_dispatch`.
    - `permissions: contents: read, packages: write`.
    - `concurrency: {group: deploy, cancel-in-progress: false}` (dois merges seguidos não rodam deploys em paralelo).
-   - Job `imagens`: `actions/checkout`, `docker/login-action` (registry `ghcr.io`, usuário `${{ github.actor }}`, senha `${{ secrets.GITHUB_TOKEN }}`), `docker/build-push-action` para `infra/jobs/Dockerfile` (contexto `.`) e `infra/mlflow/Dockerfile` (contexto `infra/mlflow`), tags `ghcr.io/${{ github.repository_owner }}/platform-jobs:${{ github.sha }}` e `:main` (idem `platform-mlflow`). Nome do dono em minúsculas (o GHCR exige).
+   - Job `images`: `actions/checkout`, `docker/login-action` (registry `ghcr.io`, usuário `${{ github.actor }}`, senha `${{ secrets.GITHUB_TOKEN }}`), `docker/build-push-action` para `infra/jobs/Dockerfile` (contexto `.`) e `infra/mlflow/Dockerfile` (contexto `infra/mlflow`), tags `ghcr.io/${{ github.repository_owner }}/platform-jobs:${{ github.sha }}` e `:main` (idem `platform-mlflow`). Nome do dono em minúsculas (o GHCR exige).
    - Fixe cada action por major atual, conferida no Marketplace.
 3. Compose: `image:` nos três serviços, como na tabela.
 4. `ci.yml`: passo `docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:<versão> -color` (fixe a versão).

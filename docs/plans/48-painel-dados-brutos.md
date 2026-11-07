@@ -6,7 +6,7 @@
 ## 1. Objetivo
 
 Provisionar um painel "Dados brutos" com a carga do ONS por subsistema, o clima observado por local e a saúde da coleta de previsões (linhas por `issued_at`).
-As consultas SQL são testadas contra o banco de teste com o usuário `leitura`.
+As consultas SQL são testadas contra o banco de teste com o usuário `reader`.
 
 ## 2. Fora do escopo
 
@@ -25,17 +25,17 @@ Fase 4 — "Grafana com dados brutos e previsões".
 | `infra/docker-compose.yml` | Montar `./grafana/dashboards:/etc/grafana/dashboards:ro` |
 | `tests/infra/test_dashboards_sql.py` | Executa o SQL de cada painel (test-writer) |
 
-Tabelas (já existem): `raw.ons_daily_load(subsistema, data, load_avg_mw, ingested_at)`, `raw.weather_observed(location_id, data, temp_max, temp_min, precip_mm, wind_speed_max, humidity_mean, ingested_at)`, `raw.weather_forecast(location_id, issued_at, target_date, horizon_days, ..., ingested_at)`, `ref.locations(location_id, nome, lat, lon, subsistema)`. Datasource `uid: ml` (PR 47).
+Tabelas (já existem): `raw.ons_daily_load(subsystem, date, load_avg_mw, ingested_at)`, `raw.weather_observed(location_id, date, temp_max, temp_min, precip_mm, wind_speed_max, humidity_mean, ingested_at)`, `raw.weather_forecast(location_id, issued_at, target_date, horizon_days, ..., ingested_at)`, `ref.locations(location_id, name, lat, lon, subsystem)`. Datasource `uid: ml` (PR 47).
 
 ## 5. Passos
 
-1. (test-writer) `tests/infra/test_dashboards_sql.py`, genérico para todo JSON em `infra/grafana/dashboards/`: extrai cada `targets[].rawSql`, troca as macros do Grafana por SQL comum (`$__timeFilter(col)` → `col >= now() - interval '30 days'`; `$__timeFrom()` → `now() - interval '30 days'`; `$__timeTo()` → `now()`; variáveis `$var` → valor de teste definido no próprio teste), e executa como `leitura` num banco migrado com algumas linhas inseridas pelo admin. Casos na seção 8. Confirme falha porque o JSON não existe. Commit `test: add grafana panel sql tests`.
-2. (implementer) Provider `platform.yaml` (`apiVersion: 1`, `providers: [{name: plataforma, type: file, options: {path: /etc/grafana/dashboards}, allowUiUpdates: false}]`).
+1. (test-writer) `tests/infra/test_dashboards_sql.py`, genérico para todo JSON em `infra/grafana/dashboards/`: extrai cada `targets[].rawSql`, troca as macros do Grafana por SQL comum (`$__timeFilter(col)` → `col >= now() - interval '30 days'`; `$__timeFrom()` → `now() - interval '30 days'`; `$__timeTo()` → `now()`; variáveis `$var` → valor de teste definido no próprio teste), e executa como `reader` num banco migrado com algumas linhas inseridas pelo admin. Casos na seção 8. Confirme falha porque o JSON não existe. Commit `test: add grafana panel sql tests`.
+2. (implementer) Provider `platform.yaml` (`apiVersion: 1`, `providers: [{name: platform, type: file, options: {path: /etc/grafana/dashboards}, allowUiUpdates: false}]`).
 3. `raw-data.json` (uid `raw-data`), painéis, todos com datasource `uid: ml` e `format: time_series` ou `table`:
-   - "Carga diária por subsistema (MWmed)": `select data::timestamp as time, subsistema as metric, load_avg_mw as value from raw.ons_daily_load where $__timeFilter(data::timestamp) order by 1`.
+   - "Carga diária por subsistema (MWmed)": `select date::timestamp as time, subsystem as metric, load_avg_mw as value from raw.ons_daily_load where $__timeFilter(date::timestamp) order by 1`.
    - "Temperatura máxima observada por local": análogo com `raw.weather_observed`.
    - "Snapshots de previsão por dia (esperado: 4 × 7)": `select issued_at::timestamp as time, count(*) as value from raw.weather_forecast where $__timeFilter(issued_at::timestamp) group by 1 order by 1`.
-   - "Última data por fonte" (tabela): `max(data)` do ONS, `max(data)` do observado, `max(issued_at)` da previsão, com a diferença em dias para hoje.
+   - "Última data por fonte" (tabela): `max(date)` do ONS, `max(date)` do observado, `max(issued_at)` da previsão, com a diferença em dias para hoje.
 4. Compose: montar o diretório.
 5. Rode os critérios de pronto.
 
@@ -50,13 +50,13 @@ Tabelas (já existem): `raw.ons_daily_load(subsistema, data, load_avg_mw, ingest
 
 ## 7. Testes necessários
 
-`sim`: SQL de painel quebra em silêncio (painel vazio); executar cada consulta como `leitura` pega erro de sintaxe, de coluna e de permissão.
+`sim`: SQL de painel quebra em silêncio (painel vazio); executar cada consulta como `reader` pega erro de sintaxe, de coluna e de permissão.
 
 ## 8. Casos de teste
 
 1. Todo JSON em `infra/grafana/dashboards/` é JSON válido e tem `uid` único.
 2. Todo `target` usa o datasource `uid: ml`.
-3. Todo `rawSql`, com macros substituídas, executa como `leitura` sem erro.
+3. Todo `rawSql`, com macros substituídas, executa como `reader` sem erro.
 4. Painéis `time_series` devolvem uma coluna `time` do tipo timestamp.
 5. Com 2 dias de carga para os 4 subsistemas inseridos no arranjo, o painel de carga devolve 8 linhas.
 6. Com 28 linhas de previsão de hoje, o painel de snapshots devolve `28` para hoje.

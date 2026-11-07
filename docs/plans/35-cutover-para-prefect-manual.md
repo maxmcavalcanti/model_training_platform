@@ -9,11 +9,11 @@ A troca precisa ser observada em produção por pelo menos um dia antes de desli
 
 ## Checklist
 
-- [ ] Na VPS, em `/opt/platform`: `git pull`; `docker compose -f infra/docker-compose.yml build jobs prefect-worker agendador`.
+- [ ] Na VPS, em `/opt/platform`: `git pull`; `docker compose -f infra/docker-compose.yml build jobs prefect-worker scheduler`.
 - [ ] `docker compose -f infra/docker-compose.yml up -d prefect-worker`.
 - [ ] `docker compose -f infra/docker-compose.yml run --rm jobs python -m flows.deployments`.
-- [ ] Na UI do Prefect (`https://<host>.ts.net:4200`, pela tailnet): os três deployments `.../producao` aparecem com agenda e fuso `America/Sao_Paulo`; o work pool `plataforma` tem um worker `Online`.
-- [ ] Disparar uma vez à mão pela UI o `ingest_weather_observed/producao` e ver `Completed`.
+- [ ] Na UI do Prefect (`https://<host>.ts.net:4200`, pela tailnet): os três deployments `.../production` aparecem com agenda e fuso `America/Sao_Paulo`; o work pool `platform` tem um worker `Online`.
+- [ ] Disparar uma vez à mão pela UI o `ingest_weather_observed/production` e ver `Completed`.
 - [ ] Esperar o dia seguinte com **os dois** agendadores ligados.
 
 ## Verificação de pronto
@@ -24,7 +24,7 @@ No dia seguinte, depois das 07:10 BRT:
 | --- | --- | --- |
 | UI do Prefect | Execuções agendadas dos três deployments de hoje | Três `Completed` |
 | VPS | `... exec postgres psql -U <admin> -d ml -c "select count(*) from raw.weather_forecast where issued_at = current_date"` | `28` (não 56: a segunda execução não duplicou) |
-| VPS | `docker compose -f infra/docker-compose.yml logs --since 6h agendador` | Também rodou, sem erro |
+| VPS | `docker compose -f infra/docker-compose.yml logs --since 6h scheduler` | Também rodou, sem erro |
 
 - [ ] Se tudo bateu, liberar o merge do PR 36 (remover o agendador).
 - [ ] Teste de reboot: `sudo reboot`; worker volta `Online` na UI sem intervenção.

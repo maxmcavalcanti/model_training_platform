@@ -24,16 +24,16 @@ Fase 4 — "Grafana com dados brutos e previsões".
 | `infra/grafana/dashboards/predictions.json` | O painel |
 | `tests/infra/test_dashboards_sql.py` | Casos específicos deste painel (test-writer) |
 
-Tabelas: `predictions.model_predictions(modelo, model_version, chave, target_date, predicted_value, generated_at)` (PK com `generated_at`; reexecuções criam lotes), `raw.ons_daily_load(subsistema, data, load_avg_mw, ...)`.
+Tabelas: `predictions.model_predictions(model_name, model_version, key, target_date, predicted_value, generated_at)` (PK com `generated_at`; reexecuções criam lotes), `raw.ons_daily_load(subsystem, date, load_avg_mw, ...)`.
 
 ## 5. Passos
 
-1. (test-writer) Acrescente os casos da seção 8 (o teste genérico do PR 48 já executa o SQL do JSON novo). Para a variável `$modelo`, use `'teste'` no teste. Confirme falha porque o JSON não existe. Commit `test: add predictions panel tests`.
-2. (implementer) `predictions.json` (uid `previsoes`):
-   - Variável `modelo` (query: `select distinct modelo from predictions.model_predictions order by 1`).
-   - "Último lote por data-alvo": para cada (`modelo`, `chave`, `target_date`), a linha de maior `generated_at` (`distinct on (chave, target_date) ... order by chave, target_date, generated_at desc`), filtrada por `modelo = '$modelo'`, como série temporal por `chave`.
-   - "Previsto × real (carga)": junta o último lote com `raw.ons_daily_load` em `chave = subsistema and target_date = data`; duas séries por subsistema (`previsto`, `real`).
-   - "Execuções do score": `select generated_at as time, modelo, count(*) from predictions.model_predictions where $__timeFilter(generated_at) group by 1, 2`.
+1. (test-writer) Acrescente os casos da seção 8 (o teste genérico do PR 48 já executa o SQL do JSON novo). Para a variável `$model_name`, use `'test'` no teste. Confirme falha porque o JSON não existe. Commit `test: add predictions panel tests`.
+2. (implementer) `predictions.json` (uid `predictions`):
+   - Variável `model_name` (query: `select distinct model_name from predictions.model_predictions order by 1`).
+   - "Último lote por data-alvo": para cada (`model_name`, `key`, `target_date`), a linha de maior `generated_at` (`distinct on (key, target_date) ... order by key, target_date, generated_at desc`), filtrada por `model_name = '$model_name'`, como série temporal por `key`.
+   - "Previsto × real (carga)": junta o último lote com `raw.ons_daily_load` em `key = subsystem and target_date = date`; duas séries por subsistema (`predicted`, `actual`).
+   - "Execuções do score": `select generated_at as time, model_name, count(*) from predictions.model_predictions where $__timeFilter(generated_at) group by 1, 2`.
 3. Rode os critérios de pronto.
 
 ## 6. Critérios de pronto
@@ -50,10 +50,10 @@ Tabelas: `predictions.model_predictions(modelo, model_version, chave, target_dat
 
 ## 8. Casos de teste
 
-1. Dois lotes do modelo `teste` para (`SE`, D+1) com valores 100 e 200 e `generated_at` crescente → o painel "Último lote" devolve só 200.
+1. Dois lotes do modelo `test` para (`SE`, D+1) com valores 100 e 200 e `generated_at` crescente → o painel "Último lote" devolve só 200.
 2. Previsão de `SE` para D e carga real de `SE` em D → "Previsto × real" devolve as duas séries para D.
-3. Previsão para D+1 sem real ainda → aparece só a série `previsto`, sem erro.
-4. Previsões de outro modelo não aparecem com `$modelo = 'teste'`.
+3. Previsão para D+1 sem real ainda → aparece só a série `predicted`, sem erro.
+4. Previsões de outro modelo não aparecem com `$model_name = 'test'`.
 
 ## 9. Riscos e perguntas em aberto
 

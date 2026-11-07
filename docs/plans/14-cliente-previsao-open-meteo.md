@@ -24,8 +24,8 @@ Fase 2 — "`raw.weather_forecast` coletando todo dia (prioridade)".
 | Caminho | Motivo |
 | --- | --- |
 | `pyproject.toml`, `uv.lock` | `httpx`, `tenacity` (passo 0) |
-| `ingestion/http.py` | `fetch_json(cliente, url, params, *, tentativas=3, base_delay=1.0)` com retry e backoff |
-| `ingestion/openmeteo.py` | `Local` (dataclass) e `fetch_forecast(...)` |
+| `ingestion/http.py` | `fetch_json(client, url, params, *, attempts=3, base_delay=1.0)` com retry e backoff |
+| `ingestion/openmeteo.py` | `Location` (dataclass) e `fetch_forecast(...)` |
 | `tests/fixtures/openmeteo_forecast_sao_paulo.json` | Resposta real gravada uma vez (test-writer) |
 | `tests/test_http.py`, `tests/test_openmeteo_forecast.py` | Testes (test-writer) |
 
@@ -42,15 +42,15 @@ Regra: "Retry com backoff para erro de rede (3 tentativas)".
 2. (test-writer) Escreva os testes da seção 8 usando `httpx.Client(transport=httpx.MockTransport(...))`; nenhum teste acessa a rede. Confirme falha por `ModuleNotFoundError: ingestion.http`. Commit `test: add open-meteo forecast client tests`.
 3. (implementer) `ingestion/http.py`:
    - `class NetworkError(RuntimeError)`.
-   - `fetch_json(...)`: faz `GET`; repete até `tentativas` vezes, com espera exponencial `base_delay * 2**n` (tenacity), em `httpx.TransportError`, HTTP 429 e HTTP 5xx. Outro 4xx levanta `httpx.HTTPStatusError` na primeira vez, sem repetir. Esgotadas as tentativas, levanta `NetworkError` com a URL e a última causa.
+   - `fetch_json(...)`: faz `GET`; repete até `attempts` vezes, com espera exponencial `base_delay * 2**n` (tenacity), em `httpx.TransportError`, HTTP 429 e HTTP 5xx. Outro 4xx levanta `httpx.HTTPStatusError` na primeira vez, sem repetir. Esgotadas as tentativas, levanta `NetworkError` com a URL e a última causa.
    - Também `fetch_bytes(...)` com a mesma política (o PR 20 usa para o parquet do ONS).
 4. `ingestion/openmeteo.py`:
    - `@dataclass(frozen=True) class Location: location_id: str; lat: float; lon: float`.
    - `FORECAST_URL = "https://api.open-meteo.com/v1/forecast"`.
    - `VARIAVEIS = {"temperature_2m_max": "temp_max", "temperature_2m_min": "temp_min", "precipitation_sum": "precip_mm", "wind_speed_10m_max": "wind_speed_max", "relative_humidity_2m_mean": "humidity_mean"}`.
-   - `fetch_forecast(cliente, local, issued_at: date, dias: int = 7, *, base_delay=1.0) -> pd.DataFrame`: parâmetros `latitude`, `longitude`, `daily` (chaves de `VARIAVEIS` separadas por vírgula), `timezone=America/Sao_Paulo`, `forecast_days=dias + 1`.
+   - `fetch_forecast(client, location, issued_at: date, days: int = 7, *, base_delay=1.0) -> pd.DataFrame`: parâmetros `latitude`, `longitude`, `daily` (chaves de `VARIAVEIS` separadas por vírgula), `timezone=America/Sao_Paulo`, `forecast_days=days + 1`.
    - Valida que o primeiro dia de `daily.time` é `issued_at`; se não for, levanta `ValueError` (indica fuso errado ou execução fora do dia).
-   - Devolve só `target_date` de `issued_at + 1` até `issued_at + dias` (horizontes 1 a 7; ver P8), colunas `location_id, issued_at, target_date, temp_max, temp_min, precip_mm, wind_speed_max, humidity_mean`, tipos `date` e `float`; valores `null` da API viram `NaN`.
+   - Devolve só `target_date` de `issued_at + 1` até `issued_at + days` (horizontes 1 a 7; ver P8), colunas `location_id, issued_at, target_date, temp_max, temp_min, precip_mm, wind_speed_max, humidity_mean`, tipos `date` e `float`; valores `null` da API viram `NaN`.
 5. Rode os critérios de pronto e refatore com a suíte verde.
 
 ## 6. Critérios de pronto
@@ -60,7 +60,7 @@ Regra: "Retry com backoff para erro de rede (3 tentativas)".
 | `uv run pytest tests/test_http.py tests/test_openmeteo_forecast.py` | Todos passam, sem acesso à rede |
 | `uv run pytest` | Suíte verde |
 | `uv run ruff check .` e `uv run ruff format --check .` | Sem erro |
-| `uv run python -c "import httpx; from datetime import date; from ingestion.openmeteo import Local, fetch_forecast; print(fetch_forecast(httpx.Client(), Local('sao_paulo', -23.55, -46.63), date.today()).shape)"` (manual, com rede) | `(7, 8)` |
+| `uv run python -c "import httpx; from datetime import date; from ingestion.openmeteo import Location, fetch_forecast; print(fetch_forecast(httpx.Client(), Location('sao_paulo', -23.55, -46.63), date.today()).shape)"` (manual, com rede) | `(7, 8)` |
 | `gh pr checks` | Verde |
 
 ## 7. Testes necessários
@@ -83,7 +83,7 @@ Regra: "Retry com backoff para erro de rede (3 tentativas)".
 9. A requisição enviada tem `timezone=America/Sao_Paulo`, `forecast_days=8` e as 5 variáveis em `daily`.
 10. Fixture alterada com `null` em `precipitation_sum` → `NaN` em `precip_mm`.
 11. `issued_at` diferente do primeiro dia da resposta → `ValueError`.
-12. `dias=3` → 3 linhas e `forecast_days=4` na requisição.
+12. `days=3` → 3 linhas e `forecast_days=4` na requisição.
 
 ## 9. Riscos e perguntas em aberto
 

@@ -11,7 +11,7 @@ Função pura em relação a MLflow e instalação de pacote, para ser testável
 
 ## 2. Fora do escopo
 
-- Descobrir os modelos `champion` no MLflow (PR 43). Instalar a versão do pacote `modelos` (PR 44). Ponto de entrada e flow (PRs 45 e 46).
+- Descobrir os modelos `champion` no MLflow (PR 43). Instalar a versão do pacote `models` (PR 44). Ponto de entrada e flow (PRs 45 e 46).
 
 ## 3. Fase do roadmap
 
@@ -36,21 +36,21 @@ def predict(model, features: pd.DataFrame) -> pd.DataFrame: ...
 
 "Todo dia, o job de score busca `models:/<nome>@champion` no MLflow, chama `build_features` → `predict` e grava em `predictions.model_predictions`." "Erro dentro do código dela aparece no Prefect com o traceback, e quem investiga é ela."
 
-Código existente: `ingestion/db.py` (`upsert`), `ingestion/checks.py` (`checar`).
+Código existente: `ingestion/db.py` (`upsert`), `ingestion/checks.py` (`check`).
 
 ## 5. Passos
 
 1. (test-writer) Testes da seção 8 com um módulo falso (`types.SimpleNamespace` com `build_features` e `predict`) e `migrated_database`. Confirme falha por `ModuleNotFoundError: flows.score`. Commit `test: add score core tests`.
 2. (implementer) `flows/score.py`:
    - `class InvalidOutput(RuntimeError)`.
-   - `SCHEMA_PREDICT_OUTPUT` (pandera): colunas `chave` (texto, não nula), `target_date` (data, não nula), `predicted_value` (float, não nulo, finito); unicidade (`chave`, `target_date`); colunas extras são rejeitadas.
-   - `generate_predictions(conn, *, nome: str, versao: str, modulo, modelo, ref_date: date, agora: datetime) -> int`:
-     1. `features = modulo.build_features(conn, ref_date)`. Exceção aqui **não** é capturada (o traceback dela precisa aparecer inteiro).
-     2. `saida = modulo.predict(modelo, features)`. Idem.
-     3. Valida `saida`; falha → `InvalidOutput` com o nome do modelo e o detalhe.
+   - `SCHEMA_PREDICT_OUTPUT` (pandera): colunas `key` (texto, não nula), `target_date` (data, não nula), `predicted_value` (float, não nulo, finito); unicidade (`key`, `target_date`); colunas extras são rejeitadas.
+   - `generate_predictions(conn, *, name: str, version: str, module, model, ref_date: date, now: datetime) -> int`:
+     1. `features = module.build_features(conn, ref_date)`. Exceção aqui **não** é capturada (o traceback dela precisa aparecer inteiro).
+     2. `output = module.predict(model, features)`. Idem.
+     3. Valida `output`; falha → `InvalidOutput` com o nome do modelo e o detalhe.
      4. `target_date` < `ref_date` → `InvalidOutput` (previsão para o passado).
      5. Saída vazia → `InvalidOutput` (um champion que não prevê nada é falha, não sucesso).
-     6. Grava com `upsert(conn, "predictions.model_predictions", df, chaves=["modelo","chave","target_date","generated_at"], on_conflict="ignorar", stamp_ingested_at=False)` com `modelo=nome`, `model_version=versao`, `generated_at=agora` (o mesmo valor para o lote inteiro).
+     6. Grava com `upsert(conn, "predictions.model_predictions", df, keys=["model_name","key","target_date","generated_at"], on_conflict="ignore", stamp_ingested_at=False)` com `model_name=name`, `model_version=version`, `generated_at=now` (o mesmo valor para o lote inteiro).
      7. Devolve o número de linhas.
 3. Rode os critérios de pronto e refatore com a suíte verde.
 
@@ -68,14 +68,14 @@ Código existente: `ingestion/db.py` (`upsert`), `ingestion/checks.py` (`checar`
 
 ## 8. Casos de teste
 
-1. Módulo falso que devolve 4 linhas (`SE`, `S`, `NE`, `N`, `target_date` = D+1) → 4 linhas em `predictions.model_predictions` com `modelo`, `model_version` e o mesmo `generated_at`; retorno 4.
-2. `build_features` recebe exatamente `conn` e `ref_date`; `predict` recebe o `modelo` passado e o DataFrame de `build_features`.
-3. Rodar duas vezes com `agora` diferente → 8 linhas (dois lotes).
-4. Rodar duas vezes com o mesmo `agora` → 4 linhas.
+1. Módulo falso que devolve 4 linhas (`SE`, `S`, `NE`, `N`, `target_date` = D+1) → 4 linhas em `predictions.model_predictions` com `model_name`, `model_version` e o mesmo `generated_at`; retorno 4.
+2. `build_features` recebe exatamente `conn` e `ref_date`; `predict` recebe o `model` passado e o DataFrame de `build_features`.
+3. Rodar duas vezes com `now` diferente → 8 linhas (dois lotes).
+4. Rodar duas vezes com o mesmo `now` → 4 linhas.
 5. `predict` sem a coluna `predicted_value` → `InvalidOutput` citando a coluna; nada gravado.
 6. `predicted_value` com `NaN` → `InvalidOutput`.
-7. `(chave, target_date)` duplicado → `InvalidOutput`.
-8. Coluna extra `classe` → `InvalidOutput`.
+7. `(key, target_date)` duplicado → `InvalidOutput`.
+8. Coluna extra `label` → `InvalidOutput`.
 9. `target_date` anterior a `ref_date` → `InvalidOutput`.
 10. Saída vazia → `InvalidOutput`.
 11. `build_features` levantando `KeyError("x")` → a mesma `KeyError` sobe (não é embrulhada).

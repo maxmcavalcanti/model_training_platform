@@ -16,7 +16,7 @@ Revisão v2 (2026-11-07): aplica as decisões P1 a P5 do usuário (toolchain, re
 
 - **Rede só Tailscale** (P4, 2026-11-07). Nenhuma porta pública: sem domínio, sem proxy com autenticação, sem certificado público. As UIs (MLflow, Prefect, Grafana e a rota de saúde) são publicadas só em `127.0.0.1` e expostas na tailnet por `tailscale serve`, num hostname `*.ts.net` com uma porta por UI (recomendado; a alternativa, acesso direto pelo IP/nome do tailnet, é a decisão fina do ADR de rede). O Postgres fica no IP do Tailscale ou em loopback + `tailscale serve --tcp` (P15). Nenhuma porta de serviço é publicada em `0.0.0.0`; os testes do PR 03 travam isso. A ACL do Tailscale é o controle de acesso.
 - **VPS de 1 GB** (P3, 2026-11-07): 1 vCPU, 1 GB de RAM, 25 GB de SSD, 1 TB de transferência, provedor "Regular Cloud Compute", com 2 GB de swap (item 02) e `mem_limit` em todo serviço do compose (teste do PR 03). **As Fases 0 a 2 devem caber em 1 GB. Da Fase 3 em diante a memória é medida (checkpoint 28a antes do PR 29, e de novo nos itens 31, 35, 50 e 59) e pode exigir upgrade**, que só acontece sob necessidade (item 28b, condicional). Estimativas a medir, não fatos: Postgres 100–250 MB, MLflow 300–500 MB, Prefect server + worker 500–800 MB, Grafana 100–200 MB, Tailscale ~30 MB, job de ingestão com pandas 200–400 MB de pico.
-- **Repositórios públicos** (P2, 2026-11-07), do próprio usuário. A VPS clona o repo e puxa as imagens do GHCR sem token nem `docker login`; o job de score instala o pacote `modelos` sem token. **Nenhum segredo entra no git, nem no histórico**: num repo público, um segredo commitado uma vez é público para sempre e precisa ser trocado (reescrever o histórico não basta). Segredos só no `infra/.env` da VPS (`chmod 600`, fora do git) e nos GitHub Secrets.
+- **Repositórios públicos** (P2, 2026-11-07), do próprio usuário. A VPS clona o repo e puxa as imagens do GHCR sem token nem `docker login`; o job de score instala o pacote `models` sem token. **Nenhum segredo entra no git, nem no histórico**: num repo público, um segredo commitado uma vez é público para sempre e precisa ser trocado (reescrever o histórico não basta). Segredos só no `infra/.env` da VPS (`chmod 600`, fora do git) e nos GitHub Secrets.
 
 ## Tabela
 
@@ -30,7 +30,7 @@ Legenda: **A** = agente implementa; **U** = usuário executa (VPS, Tailscale, co
 | 04 | Publicar a saúde na tailnet e testar reboot | 0 | 02, 03 | U | — | **Fase 0 pronta**: reboot traz tudo de volta; nada escuta na internet |
 | 05 | Conexão Postgres e banco de teste | 1 | 01, 03 | A | sim | `build_engine()`; Postgres descartável local e no CI |
 | 06 | Alembic e schemas | 1 | 05 | A | sim | Migrações versionadas; CI roda `alembic upgrade head` |
-| 07 | Papéis e permissões | 1 | 06 | A | sim | `ingestor`, `cientista`, `scorer`, `leitura` com privilégios padrão |
+| 07 | Papéis e permissões | 1 | 06 | A | sim | `ingestor`, `scientist`, `scorer`, `reader` com privilégios padrão |
 | 08 | Upsert idempotente | 1 | 07 | A | sim | Uma função única de upsert com `ingested_at` |
 | 09 | `ref.locations` | 1 | 07 | A | sim | As 4 capitais, base dos jobs de clima |
 | 10 | Postgres no compose de produção | 1 | 03, 05 | A | sim | Banco na VPS exposto só na tailnet |
@@ -65,14 +65,14 @@ Legenda: **A** = agente implementa; **U** = usuário executa (VPS, Tailscale, co
 | 37 | Imagens no GHCR | 3 | 34, 36 | A | sim | Build reproduzível a cada merge |
 | 38 | Segredos do CI/CD | 3 | 37 | U | — | Acesso do CI à VPS via Tailscale, sem porta pública; pacotes do GHCR públicos, sem token de leitura |
 | 39 | Deploy via SSH | 3 | 37, 38 | A | sim | Merge na `main` chega à VPS |
-| 40 | Prova do deploy e CI do `modelos` | 3 | 36, 39 | U | — | **Fase 3 pronta** |
+| 40 | Prova do deploy e CI do `models` | 3 | 36, 39 | U | — | **Fase 3 pronta** |
 | 41 | `predictions.model_predictions` | 4 | 25, 40 | A | sim | Tabela única de previsões |
 | 42 | Núcleo do score | 4 | 41 | A | sim | Contrato validado e gravado |
 | 43 | Descobrir champions no MLflow | 4 | 42 | A | sim | Score genérico por alias |
 | 44 | Executor isolado (`uv run --with`) | 4 | 43 | A | sim | Cada modelo roda com a sua versão do pacote |
 | 45 | `flows.score_one` | 4 | 42, 43, 44 | A | sim | Ponta a ponta MLflow → pacote → banco |
 | 46 | Flow `score_models` (07:30) | 4 | 45 | A | sim | Score diário de todos os champions |
-| 47 | Grafana no compose | 4 | 30, 41 | A | sim | Painéis com usuário `leitura`, só na tailnet |
+| 47 | Grafana no compose | 4 | 30, 41 | A | sim | Painéis com usuário `reader`, só na tailnet |
 | 48 | Painel de dados brutos | 4 | 47 | A | sim | Saúde das fontes visível |
 | 49 | Painel de previsões | 4 | 48 | A | sim | Previsto × real visível |
 | 50 | Modelo de teste e pronto da Fase 4 | 4 | 46, 47, 48, 49 | U | — | **Fase 4 pronta**: média móvel grava todo dia |
@@ -137,7 +137,7 @@ Caminho crítico até ligar `raw.weather_forecast` (prioridade do doc): 01 → 0
 | Id | Pergunta | Decisão do usuário | Specs afetadas |
 | --- | --- | --- | --- |
 | P1 | Toolchain | **Aprovada**: uv, ruff, pytest, hatchling, Python 3.12, CI no GitHub Actions, pacotes na raiz. A instalação do `uv` e do Docker Desktop no Windows é conferida no passo 1 do 01 e nos riscos do 05 | 01, 05 |
-| P2 | Dono e visibilidade dos repositórios | **Públicos, do próprio usuário**. A VPS puxa código e imagens do GHCR sem token de leitura; o score instala `modelos` sem token. Nenhum segredo no git, nem no histórico | 01, 02, 37, 38, 39, 40, 44, 46, 50 |
+| P2 | Dono e visibilidade dos repositórios | **Públicos, do próprio usuário**. A VPS puxa código e imagens do GHCR sem token de leitura; o score instala `models` sem token. Nenhum segredo no git, nem no histórico | 01, 02, 37, 38, 39, 40, 44, 46, 50 |
 | P3 | VPS | **Resolvida em parte**: provedor "Regular Cloud Compute", 1 vCPU, 1 GB de RAM, 25 GB de SSD, 1 TB de transferência. Swap de 2 GB, `mem_limit` por serviço, checkpoint de memória 28a antes do PR 29 e upgrade 28b só sob necessidade. Falta confirmar SO e arquitetura (`uname -m`), registrados no item 02 | 02, 03, 05, 10, 11, 16, 28a, 28b, 29, 30, 31, 34, 35, 44, 46, 47, 50, 57, 59 |
 | P4 | Rede | **Só Tailscale**. Sem domínio, sem Caddy, sem certificado público, sem 443 pública. HTTPS e acesso por `tailscale serve` (um hostname `*.ts.net`, uma porta por UI) ou acesso direto pelo IP/nome do tailnet (decisão fina no ADR de rede). A 22 pública fica aberta só no provisionamento e é fechada quando o SSH pela tailnet funciona | 02, 03, 04, 10, 12, 28, 29, 30, 31, 35, 38, 39, 40, 47, 50, 55, 56 |
 | P5 | Coleta da previsão antes do ONS | **Aprovada**: 13–17 ficam antes do ONS, como planejado | 13, 14, 15, 17 |
@@ -153,8 +153,8 @@ Decidir antes do PR indicado. Os marcados com ADR precisam do ADR aprovado antes
 | P8 (ADR de contrato) | `issued_at` como `date` (um snapshot por dia, o primeiro vence) ou `timestamptz`? Guardar horizonte 0? | `date`, primeiro vence, horizontes 1 a 7; avaliar horizonte 0 com a cientista | 13 |
 | P9 | `ingested_at` no upsert com atualização: "última escrita" ou "primeira entrada" + `updated_at`? | Última escrita (sem coluna nova) | 08 |
 | P10 | Backfill de previsões passadas pela API "Historical Forecast" do Open-Meteo? O doc exclui | Fora do escopo agora; vale uma conversa com a cientista, porque resolveria a "decisão dela" sobre treinar com previsão | — |
-| P11 | Onde vive o modelo de teste (média móvel)? | No repo `modelos`, com PR aprovado por ela | 50 |
-| P12 (ADR de execução) | Como o score sabe a versão do pacote `modelos`? Esquema de tags do repo `modelos` | Tag `models_package=<tag git>` na versão do modelo no MLflow; semver | 43, 44 |
+| P11 | Onde vive o modelo de teste (média móvel)? | No repo `models`, com PR aprovado por ela | 50 |
+| P12 (ADR de execução) | Como o score sabe a versão do pacote `models`? Esquema de tags do repo `models` | Tag `models_package=<tag git>` na versão do modelo no MLflow; semver | 43, 44 |
 | P13 (ADR de execução) | Tipo de `conn` em `build_features`; objeto `model` em `predict`; colunas extras na saída; versão do MLflow igual em servidor, notebook e score | `sqlalchemy.Connection`; `mlflow.pyfunc.load_model`; saída estrita; mesma versão | 29, 42 |
 | P14 (ADR de contrato) | De onde vem o "real" do monitoramento? | Função `load_actuals(conn, target_date)` no módulo dela | 53 |
 | P15 | Postgres publicado no IP do Tailscale (depende da ordem de boot), em loopback + `tailscale serve --tcp=5432` (mesmo modelo das UIs, sem dependência de boot) ou sidecar do Tailscale no compose? | Loopback + `tailscale serve --tcp`, se o ADR de rede ficar com `tailscale serve`; senão, IP do Tailscale com `After=tailscaled.service` | 10, 12 |

@@ -20,8 +20,8 @@ Fase 2 — "`raw.weather_observed` + backfill desde 2015".
 
 | Caminho | Motivo |
 | --- | --- |
-| `ingestion/checks.py` | `SCHEMA_WEATHER_OBSERVED` e `check_weather_continuity(df, fim, max_delay_days)` |
-| `ingestion/jobs.py` | `ingest_weather_observed(engine, cliente, inicio, fim, *, max_delay_days, base_delay)` |
+| `ingestion/checks.py` | `SCHEMA_WEATHER_OBSERVED` e `check_weather_continuity(df, end, max_delay_days)` |
+| `ingestion/jobs.py` | `ingest_weather_observed(engine, client, start, end, *, max_delay_days, base_delay)` |
 | `ingestion/cli.py` | Subcomando `weather-observed [--start] [--end] [--days N]` |
 | `infra/cron/crontab` | Linha `45 6 * * * python -m ingestion weather-observed` |
 | `tests/test_job_weather_observed.py`, `tests/infra/test_crontab.py` | Testes (test-writer) |
@@ -34,10 +34,10 @@ Do doc: "06:45 `ingest_weather_observed` — Upsert dos últimos 10 dias de clim
 
 1. (test-writer) Escreva os testes da seção 8 com `migrated_database` e `httpx.MockTransport` (respostas montadas no teste no formato da fixture `tests/fixtures/openmeteo_archive_sao_paulo.json`). Em `tests/infra/test_crontab.py`: exatamente uma linha `weather-observed` com `45 6 * * *`. Confirme falha. Commit `test: add weather-observed job tests`.
 2. (implementer) `checks.py`:
-   - `SCHEMA_WEATHER_OBSERVED`: chaves não nulas; mesmas faixas de `SCHEMA_WEATHER_FORECAST` (temperaturas −10 a 50, `temp_min <= temp_max`, `precip_mm` ≥ 0, `wind_speed_max` ≥ 0, `humidity_mean` 0 a 100); unicidade (`location_id`, `data`). Extraia as faixas comuns para não duplicar.
-   - `check_weather_continuity(df, locais, fim, max_delay_days)`: para cada local, sem dia faltando entre a menor e a maior data, e maior data ≥ `fim - max_delay_days`.
-3. `jobs.py`, `ingest_weather_observed(engine, cliente, inicio, fim, *, max_delay_days=7, base_delay=1.0)`: mesmo padrão de `ingest_weather_forecast` (busca por local, continua se um local falhar, grava os que deram certo, falha no fim citando os locais), mas com `on_conflict="atualizar"` (o observado pode ser corrigido pela fonte) e chaves `["location_id", "data"]`. Depois de gravar, relê o intervalo e checa.
-4. CLI `weather-observed`: sem argumentos, `fim` = hoje (BRT) e `inicio = fim - 9`; `--days`, `--start`, `--end` como no `ons-load`.
+   - `SCHEMA_WEATHER_OBSERVED`: chaves não nulas; mesmas faixas de `SCHEMA_WEATHER_FORECAST` (temperaturas −10 a 50, `temp_min <= temp_max`, `precip_mm` ≥ 0, `wind_speed_max` ≥ 0, `humidity_mean` 0 a 100); unicidade (`location_id`, `date`). Extraia as faixas comuns para não duplicar.
+   - `check_weather_continuity(df, locations, end, max_delay_days)`: para cada local, sem dia faltando entre a menor e a maior data, e maior data ≥ `end - max_delay_days`.
+3. `jobs.py`, `ingest_weather_observed(engine, client, start, end, *, max_delay_days=7, base_delay=1.0)`: mesmo padrão de `ingest_weather_forecast` (busca por local, continua se um local falhar, grava os que deram certo, falha no fim citando os locais), mas com `on_conflict="update"` (o observado pode ser corrigido pela fonte) e chaves `["location_id", "date"]`. Depois de gravar, relê o intervalo e checa.
+4. CLI `weather-observed`: sem argumentos, `end` = hoje (BRT) e `start = end - 9`; `--days`, `--start`, `--end` como no `ons-load`.
 5. Acrescente a linha ao crontab.
 6. Rode os critérios de pronto.
 
@@ -47,7 +47,7 @@ Do doc: "06:45 `ingest_weather_observed` — Upsert dos últimos 10 dias de clim
 | --- | --- |
 | `uv run pytest tests/test_job_weather_observed.py tests/infra/test_crontab.py` | Todos passam |
 | Banco local migrado, com rede: `uv run python -m ingestion weather-observed; echo $?` | `0` |
-| `select location_id, count(*), max(data) from raw.weather_observed group by 1` | 4 locais; `max(data)` dentro do atraso do ERA5 |
+| `select location_id, count(*), max(date) from raw.weather_observed group by 1` | 4 locais; `max(date)` dentro do atraso do ERA5 |
 | Rodar de novo e contar | Mesmo número |
 | `uv run pytest` | Suíte verde |
 | `gh pr checks` | Verde |

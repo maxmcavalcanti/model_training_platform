@@ -37,7 +37,7 @@ Fase 1 — infraestrutura necessária para "Ingestão do ONS" e para as migraç�
 
 1. (test-writer) Escreva `tests/test_cli.py` e os casos de compose (seção 8). Confirme falha porque `ingestion.cli` não existe. Commit `test: add cli and jobs image tests`.
 2. (implementer) `ingestion/cli.py`:
-   - `SUBCOMMANDS: dict[str, Subcommand]`, onde cada subcomando registra seus argumentos e uma função `executar(args) -> int`. Os PRs seguintes só acrescentam entradas.
+   - `SUBCOMMANDS: dict[str, Subcommand]`, onde cada subcomando registra seus argumentos e uma função `run(args) -> int`. Os PRs seguintes só acrescentam entradas.
    - Códigos de saída: `0` sucesso; `1` falha de execução ou de checagem; `2` uso incorreto (padrão do argparse).
    - Exceção não tratada dentro de um subcomando: registra o traceback no stderr e devolve `1`.
    - Logging: `logging.basicConfig(level=INFO)` com formato que inclui data/hora e nome do logger.

@@ -5,7 +5,7 @@
 
 ## 1. Objetivo
 
-Criar `evaluate_day`, que para um modelo e uma data-alvo pega o último lote de previsões, obtém o real por uma função injetada, chama `evaluate(previsto, real)` do módulo dela e grava o dicionário em `monitoring.model_metrics`.
+Criar `evaluate_day`, que para um modelo e uma data-alvo pega o último lote de previsões, obtém o real por uma função injetada, chama `evaluate(predicted, actual)` do módulo dela e grava o dicionário em `monitoring.model_metrics`.
 A origem do real fica fora deste PR (injeção), porque depende de uma decisão de contrato (PR 53).
 
 ## 2. Fora do escopo
@@ -20,7 +20,7 @@ Fase 5 — "Job de monitoramento + `monitoring.model_metrics`".
 
 | Caminho | Motivo |
 | --- | --- |
-| `flows/monitor.py` | `ActualsUnavailable`, `InvalidMetrics`, `latest_batch(conn, nome, target_date)`, `evaluate_day(...)` |
+| `flows/monitor.py` | `ActualsUnavailable`, `InvalidMetrics`, `latest_batch(conn, name, target_date)`, `evaluate_day(...)` |
 | `tests/test_monitor_core.py` | Testes com módulo falso e `get_actuals` falso (test-writer) |
 
 Contrato (`docs/plataforma-ml.md`):
@@ -32,19 +32,19 @@ def evaluate(previsto: pd.DataFrame, real: pd.DataFrame) -> dict[str, float]: ..
 
 "O job de monitoramento cruza previsões com o real e grava o retorno de `evaluate` em `monitoring.model_metrics`." Horário: 08:00, "Junta previsões antigas com o real que chegou e grava métricas".
 
-Tabelas: `predictions.model_predictions(modelo, model_version, chave, target_date, predicted_value, generated_at)`; `monitoring.model_metrics(modelo, model_version, data, metrica, valor)`. Código existente: `ingestion/db.py` (`upsert`).
+Tabelas: `predictions.model_predictions(model_name, model_version, key, target_date, predicted_value, generated_at)`; `monitoring.model_metrics(model_name, model_version, date, metric, value)`. Código existente: `ingestion/db.py` (`upsert`).
 
 ## 5. Passos
 
 1. (test-writer) Testes da seção 8 com `migrated_database`, previsões inseridas pelo admin no arranjo e um módulo falso cujo `evaluate` registra os argumentos. Confirme falha por `ModuleNotFoundError: flows.monitor`. Commit `test: add monitor core tests`.
 2. (implementer) `flows/monitor.py`:
-   - `latest_batch(conn, nome, target_date) -> pd.DataFrame` com colunas `chave, target_date, predicted_value` e o `model_version` do lote: as linhas do maior `generated_at` entre as previsões daquele modelo e `target_date`. Sem previsão → DataFrame vazio.
-   - `evaluate_day(conn, *, nome, modulo, target_date, get_actuals: Callable[[Connection, date], pd.DataFrame]) -> dict[str, float] | None`:
-     1. `previsto = latest_batch(...)`; vazio → devolve `None` (nada a avaliar; não é erro).
-     2. `real = get_actuals(conn, target_date)` (colunas `chave, target_date, actual_value`); vazio → `ActualsUnavailable` (o flow trata como "ainda não chegou").
-     3. Chama `modulo.evaluate(previsto, real)`; exceção sobe sem embrulho.
+   - `latest_batch(conn, name, target_date) -> pd.DataFrame` com colunas `key, target_date, predicted_value` e o `model_version` do lote: as linhas do maior `generated_at` entre as previsões daquele modelo e `target_date`. Sem previsão → DataFrame vazio.
+   - `evaluate_day(conn, *, name, module, target_date, get_actuals: Callable[[Connection, date], pd.DataFrame]) -> dict[str, float] | None`:
+     1. `predicted = latest_batch(...)`; vazio → devolve `None` (nada a avaliar; não é erro).
+     2. `actual = get_actuals(conn, target_date)` (colunas `key, target_date, actual_value`); vazio → `ActualsUnavailable` (o flow trata como "ainda não chegou").
+     3. Chama `module.evaluate(predicted, actual)`; exceção sobe sem embrulho.
      4. Valida: `dict` não vazio, chaves no padrão `^[a-z][a-z0-9_]*$`, valores `float` finitos; senão `InvalidMetrics`.
-     5. `upsert(conn, "monitoring.model_metrics", ..., chaves=["modelo","data","metrica"], on_conflict="atualizar", stamp_ingested_at=False)` com `model_version` do lote.
+     5. `upsert(conn, "monitoring.model_metrics", ..., keys=["model_name","date","metric"], on_conflict="update", stamp_ingested_at=False)` com `model_version` do lote.
      6. Devolve o dicionário.
 3. Rode os critérios de pronto.
 
@@ -73,8 +73,8 @@ Tabelas: `predictions.model_predictions(modelo, model_version, chave, target_dat
 
 ## 9. Riscos e perguntas em aberto
 
-- Formato do `real` (`chave, target_date, actual_value`) é proposta deste plano e entra no ADR "Fonte do real" (PR 53).
+- Formato do `actual` (`key, target_date, actual_value`) é proposta deste plano e entra no ADR "Fonte do real" (PR 53).
 
 ## 10. Decisões que exigem ADR
 
-Depende do ADR "Fonte do real" (PR 53) para o formato do `real`.
+Depende do ADR "Fonte do real" (PR 53) para o formato do `actual`.

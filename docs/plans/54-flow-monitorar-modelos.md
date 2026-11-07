@@ -30,8 +30,8 @@ Código existente: `flows/score_flow.py` (padrão a seguir: listar champions, um
 
 ## 5. Passos
 
-1. (test-writer) Testes da seção 8 com `prefect_test_harness` e `monkeypatch` de `list_champions` e `executar`. Em `tests/test_deployments.py`: `monitor_models` com `0 8 * * *`. Confirme falha. Commit `test: add monitor flow tests`.
-2. (implementer) `monitor_models(hoje: date | None = None, dias: int = 14)`: para cada champion com `package_version`, `executar(build_command(package_version, "flows.monitor_one", ["--model", nome, "--today", hoje.isoformat(), "--days", str(dias)]))`.
+1. (test-writer) Testes da seção 8 com `prefect_test_harness` e `monkeypatch` de `list_champions` e `run`. Em `tests/test_deployments.py`: `monitor_models` com `0 8 * * *`. Confirme falha. Commit `test: add monitor flow tests`.
+2. (implementer) `monitor_models(today: date | None = None, days: int = 14)`: para cada champion com `package_version`, `run(build_command(package_version, "flows.monitor_one", ["--model", name, "--today", today.isoformat(), "--days", str(days)]))`.
 3. Deployment às `0 8 * * *`.
 4. Rode os critérios de pronto.
 
@@ -52,7 +52,7 @@ Código existente: `flows/score_flow.py` (padrão a seguir: listar champions, um
 1. Dois champions → dois comandos `flows.monitor_one` com a versão de cada um; `Completed`.
 2. Um falha → os dois rodam; `Failed` citando o que falhou.
 3. Nenhum champion → `Completed` sem chamadas.
-4. `hoje` padrão = data atual em `America/Sao_Paulo`; `dias` padrão 14.
+4. `today` padrão = data atual em `America/Sao_Paulo`; `days` padrão 14.
 5. Deployment `monitor_models` com `0 8 * * *`, fuso e pool corretos.
 
 ## 9. Riscos e perguntas em aberto
