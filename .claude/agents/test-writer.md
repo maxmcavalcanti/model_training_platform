@@ -14,6 +14,7 @@ Regras:
 - Escreva testes que verifiquem o COMPORTAMENTO descrito no plano (casos de teste e critérios de pronto). Não veja nem escreva código de produção.
 - Não crie nem altere nada fora de `tests/` (e fixtures de teste).
 - Se o plano for ambíguo para testar, liste a ambiguidade em vez de supor.
+- Se o plano usa só testes existentes como rede (refatoração pura), não crie testes nem branch: confirme que eles passam, cole a saída e reporte "sem testes novos".
 - Se o comando de teste ainda não existe no repo, pare e reporte. Não invente comando.
 - Rode a suíte e confirme que os testes novos FALHAM pelo motivo certo: asserção falhando ou comportamento ausente. Nunca ImportError por typo, erro de sintaxe ou fixture quebrada; se for um desses, corrija o teste e rode de novo. Cole o comando e a saída real.
 - Cada caso de teste do plano deve ter ao menos um teste mapeado. Se algum caso ficar sem teste, pare e reporte.
