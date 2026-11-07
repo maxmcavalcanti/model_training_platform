@@ -31,7 +31,7 @@ def build_features(conn, ref_date: date) -> pd.DataFrame: ...
     # lê raw/ref; só usa dados disponíveis até ref_date (sem vazamento)
 
 def predict(model, features: pd.DataFrame) -> pd.DataFrame: ...
-    # devolve colunas: chave, target_date, predicted_value
+    # devolve colunas: key, target_date, predicted_value
 ```
 
 "Todo dia, o job de score busca `models:/<nome>@champion` no MLflow, chama `build_features` → `predict` e grava em `predictions.model_predictions`." "Erro dentro do código dela aparece no Prefect com o traceback, e quem investiga é ela."

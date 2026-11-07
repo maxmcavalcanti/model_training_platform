@@ -26,7 +26,7 @@ Fase 5 — "Job de monitoramento + `monitoring.model_metrics`".
 Contrato (`docs/plataforma-ml.md`):
 
 ```python
-def evaluate(previsto: pd.DataFrame, real: pd.DataFrame) -> dict[str, float]: ...
+def evaluate(predicted: pd.DataFrame, actual: pd.DataFrame) -> dict[str, float]: ...
     # ex.: {"mape": 3.1, "mae": 1520.0}
 ```
 

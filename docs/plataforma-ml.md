@@ -62,7 +62,7 @@ Dois repositórios, um por dono: assim a fronteira fica visível no próprio Git
 **`platform`** (meu)
 
 ```
-plataforma/
+platform/
 ├── infra/
 │   ├── docker-compose.yml
 │   ├── caddy/Caddyfile
@@ -80,10 +80,10 @@ plataforma/
 **`models`** (dela)
 
 ```
-modelos/
+models/
 ├── notebooks/            # exploração; nunca importados por produção
 ├── src/models/
-│   ├── load_d1/         # features.py, train.py, predict.py, evaluate.py
+│   ├── load_d1/          # features.py, train.py, predict.py, evaluate.py
 │   └── rain_d1/
 ├── tests/
 ├── pyproject.toml        # pacote instalável, dependências fixadas
@@ -146,9 +146,9 @@ def build_features(conn, ref_date: date) -> pd.DataFrame: ...
     # lê raw/ref; só usa dados disponíveis até ref_date (sem vazamento)
 
 def predict(model, features: pd.DataFrame) -> pd.DataFrame: ...
-    # devolve colunas: chave, target_date, predicted_value
+    # devolve colunas: key, target_date, predicted_value
 
-def evaluate(previsto: pd.DataFrame, real: pd.DataFrame) -> dict[str, float]: ...
+def evaluate(predicted: pd.DataFrame, actual: pd.DataFrame) -> dict[str, float]: ...
     # ex.: {"mape": 3.1, "mae": 1520.0}
 ```
 

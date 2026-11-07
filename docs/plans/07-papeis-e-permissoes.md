@@ -34,7 +34,7 @@ Na tabela do modelo de dados, a coluna "Lê" é "Todos" para todas as tabelas.
 ## 5. Passos
 
 1. (test-writer) Escreva `tests/test_permissions.py` (`@pytest.mark.db`) usando um banco novo migrado até `head`. No arranjo de cada teste, como usuário admin, crie uma tabela de teste `x (id int primary key)` em cada schema (`raw`, `ref`, `predictions`, `monitoring`) — isso simula uma migração futura. Use `SET ROLE <papel>` para agir como cada papel e `RESET ROLE` depois. Casos na seção 8. Confirme falha porque os papéis não existem. Commit `test: add role permission tests`.
-2. (implementer) `uv run alembic revision -m "papeis" --rev-id 0002`.
+2. (implementer) `uv run alembic revision -m "roles" --rev-id 0002`.
 3. `upgrade`:
    - Para cada papel, crie com `LOGIN` se não existir (papéis são globais ao servidor):
      `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ingestor') THEN CREATE ROLE ingestor LOGIN; END IF; END $$;`

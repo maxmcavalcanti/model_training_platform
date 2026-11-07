@@ -29,7 +29,7 @@ O contrato do doc tem três funções; ele não diz de onde vem o `actual`. Opç
 
 ```python
 def load_actuals(conn, target_date: date) -> pd.DataFrame: ...
-    # colunas: chave, target_date, actual_value; vazio se o real ainda não chegou
+    # colunas: key, target_date, actual_value; vazio se o real ainda não chegou
 ```
 
 Por quê: só ela sabe o que é o real de cada modelo (carga do ONS para `load_d1`, `precip_mm >= 1` do observado para `rain_d1`), e assim a plataforma continua sem PR por modelo novo. Alternativa: um mapa na plataforma (modelo → consulta SQL), que exige PR aqui a cada tipo de modelo novo. **Se o ADR escolher a alternativa, este plano precisa ser refeito pelo task-planner antes de implementar.**

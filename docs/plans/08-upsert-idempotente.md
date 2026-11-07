@@ -41,11 +41,11 @@ A segunda regra é o motivo do modo `ignore` abaixo.
    ```python
    def upsert(
        conn: sqlalchemy.Connection,
-       tabela: str,                 # "schema.nome"
-       linhas: pd.DataFrame,
-       chaves: list[str],
+       table: str,                  # "schema.table"
+       rows: pd.DataFrame,
+       keys: list[str],
        *,
-       on_conflict: Literal["atualizar", "ignorar"] = "atualizar",
+       on_conflict: Literal["update", "ignore"] = "update",
        stamp_ingested_at: bool = True,
    ) -> int: ...
    ```
