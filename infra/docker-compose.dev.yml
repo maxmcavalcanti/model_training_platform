@@ -1,0 +1,16 @@
+name: platform-dev
+
+services:
+  postgres:
+    image: postgres:16.15
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_DEV_PASSWORD:-postgres}
+    ports:
+      - "${DEV_BIND_IP:-127.0.0.1}:5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
