@@ -13,7 +13,7 @@ from sqlalchemy.exc import OperationalError
 
 DEFAULT_DATABASE_URL_TEST = "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
 UNAVAILABLE_MESSAGE = (
-    "Postgres de teste indisponível: rode docker compose -f infra/docker-compose.dev.yml up -d"
+    "Test Postgres unavailable: run docker compose -f infra/docker-compose.dev.yml up -d"
 )
 
 
