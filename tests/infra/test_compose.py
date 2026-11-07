@@ -19,8 +19,8 @@ INFRA_DIR = REPO_ROOT / "infra"
 ENV_EXAMPLE = INFRA_DIR / ".env.example"
 MAIN_COMPOSE = INFRA_DIR / "docker-compose.yml"
 
-# Services allowed to publish ports in this PR (case 3). Later PRs extend this list.
-PORT_PUBLISHING_SERVICES = frozenset({"health"})
+# Services allowed to publish ports (case 3). Later PRs extend this list.
+PORT_PUBLISHING_SERVICES = frozenset({"health", "postgres"})
 
 LOOPBACK = "127.0.0.1"
 TAILSCALE_NETWORK = ipaddress.ip_network("100.64.0.0/10")
