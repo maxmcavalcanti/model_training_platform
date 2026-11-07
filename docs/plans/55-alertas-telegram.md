@@ -22,7 +22,7 @@ Fase 5 — "Alertas no Telegram, backups com restore testado".
 | --- | --- |
 | `flows/alertas.py` | `enviar_telegram(texto, *, cliente=None) -> bool` e hook `ao_falhar(flow, flow_run, state)` |
 | `flows/ingestao.py`, `flows/score_flow.py`, `flows/monitor_flow.py` | `on_failure=[ao_falhar]` e `on_crashed=[ao_falhar]` em todos os `@flow` |
-| `infra/docker-compose.yml` | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `PREFECT_UI_URL=https://prefect.${DOMINIO}` no `prefect-worker` |
+| `infra/docker-compose.yml` | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `PREFECT_UI_URL=https://${TS_HOSTNAME}:4200` (o link da mensagem só abre para quem está na tailnet) no `prefect-worker` |
 | `infra/.env.example` | As duas variáveis do Telegram (vazias) |
 | `tests/test_alertas.py` | Testes (test-writer) |
 

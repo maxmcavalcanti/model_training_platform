@@ -41,7 +41,7 @@ Regra de infra: todo serviço com `restart: unless-stopped` (o `agendador` é de
    30 6 * * * python -m ingestion clima-previsao
    ```
 3. `infra/jobs/Dockerfile`: `apt-get install -y --no-install-recommends tzdata ca-certificates curl`; baixe o `supercronic-linux-amd64` da release mais recente em github.com/aptible/supercronic/releases, confira com o SHA1 publicado na própria release (`echo "<sha1>  supercronic-linux-amd64" | sha1sum -c -`), instale em `/usr/local/bin/supercronic`. Copie `infra/cron/` para `/app/infra/cron/`. Fixe versão e checksum como `ARG`.
-4. `infra/docker-compose.yml`, serviço `agendador`: mesmo `build` do `jobs`, `command: ["supercronic", "/app/infra/cron/crontab"]`, `restart: unless-stopped`, mesmo `environment` do `jobs` (URL com `ingestor`), `depends_on: postgres` saudável, sem `ports`, sem profile.
+4. `infra/docker-compose.yml`, serviço `agendador`: mesmo `build` do `jobs`, `command: ["supercronic", "/app/infra/cron/crontab"]`, `restart: unless-stopped`, `mem_limit: 512m` (o job roda dentro deste container; mesmo limite do `jobs`), mesmo `environment` do `jobs` (URL com `ingestor`), `depends_on: postgres` saudável, sem `ports`, sem profile.
 5. `ci.yml`: depois do `docker build`, `docker run --rm plataforma-jobs:ci supercronic -test /app/infra/cron/crontab`.
 6. Rode os critérios de pronto.
 
@@ -66,13 +66,14 @@ Regra de infra: todo serviço com `restart: unless-stopped` (o `agendador` é de
 2. Todo comando tem a forma `python -m ingestion <subcomando> ...` e `<subcomando>` existe em `ingestion.cli.SUBCOMANDOS`.
 3. Existe exatamente uma linha para `clima-previsao`, com agenda `30 6 * * *`.
 4. Nenhuma linha redireciona saída para arquivo (`>`): os logs vão para o stdout do container, visíveis com `docker compose logs agendador`.
-5. Compose: `agendador` tem `restart: unless-stopped`, sem `ports`, `command` começa com `supercronic`, e `DATABASE_URL` usa `ingestor`.
+5. Compose: `agendador` tem `restart: unless-stopped`, `mem_limit`, sem `ports`, `command` começa com `supercronic`, e `DATABASE_URL` usa `ingestor`.
 
 ## 9. Riscos e perguntas em aberto
 
 - P7: alternativa ao supercronic é o crontab do host chamando `docker compose run --rm jobs ...`. O supercronic foi escolhido porque fica versionado no repo, sobe com o compose, volta após reboot pela política de restart e loga no stdout. Confirmar.
 - Falha de job só aparece em `docker compose logs agendador` até o PR 55. O item 17 inclui uma checagem diária manual até lá.
-- Arquitetura da VPS: se for ARM, baixar `supercronic-linux-arm64`. Confirmar no item 02.
+- Arquitetura da VPS: o item 02 registra a saída de `uname -m` (provedor "Regular Cloud Compute", provavelmente `x86_64`). Se for `aarch64`, baixar `supercronic-linux-arm64`.
+- Memória: com 1 GB, dois jobs ao mesmo tempo (ex.: backfill manual durante o job agendado) podem passar do `mem_limit` ou usar swap. Evite sobrepor; a medição do checkpoint 28a confirma.
 
 ## 10. Decisões que exigem ADR
 

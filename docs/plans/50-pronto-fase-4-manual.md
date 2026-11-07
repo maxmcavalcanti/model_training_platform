@@ -9,8 +9,8 @@ O modelo de teste é código do pacote `modelos` (outro repositório, outra dona
 
 ## Checklist
 
-- [ ] Senhas: `POSTGRES_SCORER_SENHA` e `POSTGRES_LEITURA_SENHA` e `GRAFANA_ADMIN_SENHA` no `infra/.env` da VPS; `ALTER ROLE scorer PASSWORD ...` e `ALTER ROLE leitura PASSWORD ...` no Postgres (como no item 12). `MODELOS_REPO` e, se privado, `MODELOS_GIT_TOKEN` (token só leitura do repo `modelos`).
-- [ ] DNS de `grafana.<dominio>`.
+- [ ] Senhas: `POSTGRES_SCORER_SENHA` e `POSTGRES_LEITURA_SENHA` e `GRAFANA_ADMIN_SENHA` no `infra/.env` da VPS; `ALTER ROLE scorer PASSWORD ...` e `ALTER ROLE leitura PASSWORD ...` no Postgres (como no item 12). `MODELOS_REPO` (repo público, sem token).
+- [ ] Na VPS: `infra/scripts/tailscale-serve.sh` (ou o deploy já reaplicou); `tailscale serve status` lista a porta 3000. ACL do Tailscale: acrescentar `tag:plataforma:3000` para a cientista.
 - [ ] Reaplicar o deploy (re-executar o último `deploy.yml` com `gh run rerun <id>` ou um merge trivial) para os serviços lerem o `.env` novo.
 - [ ] No repo `modelos`, PR com `src/modelos/media_movel/`:
   - `build_features(conn, data_ref)`: lê `raw.ons_carga_diaria` até `data_ref - 1` e calcula a média dos últimos 7 dias por subsistema.
@@ -26,7 +26,12 @@ O modelo de teste é código do pacote `modelos` (outro repositório, outra dona
 | --- | --- | --- |
 | UI do Prefect | Última execução de `score_modelos` | `Completed`, com a task `media_movel` |
 | VPS | `... psql -c "select modelo, versao_modelo, count(*), max(gerado_em) from predictions.previsoes group by 1,2"` | `media_movel`, 4 linhas por execução |
-| Grafana (`https://grafana.<dominio>`) | Painéis "Dados brutos" e "Previsões" | Mostram dados; "Previsto × real" com as duas séries para dias passados |
+| Grafana (`https://<host>.ts.net:3000`, pela tailnet) | Painéis "Dados brutos" e "Previsões" | Mostram dados; "Previsto × real" com as duas séries para dias passados |
 | Em 7 dias | `select gerado_em::date, count(*) from predictions.previsoes where modelo='media_movel' group by 1 order by 1` | Uma linha por dia, 4 previsões cada |
 
 - [ ] Prova do deploy de modelo sem a plataforma: ela muda o alias `champion` para outra versão; no dia seguinte, `versao_modelo` nas previsões é a nova, sem PR neste repo.
+
+Memória (mesmos comandos e gatilhos do 28a):
+
+- [ ] Com a stack desta fase no ar, em repouso e durante um job: `free -m`, `docker stats --no-stream`, `vmstat 5 12`, `sudo dmesg -T | grep -i -E 'out of memory|killed process'`. Anote os números.
+- [ ] Se um gatilho do 28b disparar (`available` abaixo de ~150 MB, swap em uso constante ou OOM do kernel), faça o 28b antes do próximo PR que acrescenta serviço. Sem gatilho, segue em 1 GB.

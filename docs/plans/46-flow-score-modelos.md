@@ -22,7 +22,7 @@ Fase 4 — "Job genérico de score lendo `@champion`".
 | --- | --- |
 | `flows/score_flow.py` | `@flow(name="score_modelos")` e `@task pontuar_modelo` |
 | `flows/deployments.py` | Entrada `score_modelos` com cron `30 7 * * *` |
-| `infra/docker-compose.yml` | `prefect-worker`: `DATABASE_URL_SCORER`, `MLFLOW_TRACKING_URI=http://mlflow:5000`, `MODELOS_REPO`, `MODELOS_GIT_TOKEN`; `depends_on: mlflow` |
+| `infra/docker-compose.yml` | `prefect-worker`: `DATABASE_URL_SCORER`, `MLFLOW_TRACKING_URI=http://mlflow:5000`, `MODELOS_REPO` (repo público, sem token); `depends_on: mlflow` |
 | `infra/.env.example` | `POSTGRES_SCORER_SENHA` |
 | `tests/test_flow_score.py`, `tests/test_deployments.py`, `tests/infra/test_compose.py` | Testes (test-writer) |
 
@@ -65,7 +65,7 @@ Código existente: `flows/registro.py` (`listar_champions`), `flows/executor.py`
 
 ## 9. Riscos e perguntas em aberto
 
-- O worker passa a ter duas credenciais (`ingestor` e `scorer`). Alternativa mais rígida: um segundo worker, num pool `score`, só com `scorer`. Este plano fica com um worker; o subprocesso só recebe `DATABASE_URL_SCORER` (o executor deve repassar só as variáveis necessárias). Confirmar com o usuário.
+- O worker passa a ter duas credenciais (`ingestor` e `scorer`). Alternativa mais rígida: um segundo worker, num pool `score`, só com `scorer`. Este plano fica com um worker (um segundo worker custaria mais memória numa VPS de 1 GB); o subprocesso só recebe `DATABASE_URL_SCORER` (o executor deve repassar só as variáveis necessárias). Confirmar com o usuário.
 
 ## 10. Decisões que exigem ADR
 

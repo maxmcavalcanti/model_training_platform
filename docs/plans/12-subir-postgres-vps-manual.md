@@ -13,13 +13,13 @@ Na VPS, como `deploy`, em `/opt/plataforma`:
 
 - [ ] `git pull`.
 - [ ] Gerar senhas fortes (ex.: `openssl rand -base64 24`) para: admin, `ingestor`, `cientista`, `scorer`, `leitura`. Guardar no gerenciador de senhas.
-- [ ] Acrescentar ao `infra/.env` (ver `infra/.env.example`): `POSTGRES_ADMIN_USUARIO`, `POSTGRES_ADMIN_SENHA`, `POSTGRES_BIND_IP=<tailscale ip -4>`, `POSTGRES_INGESTOR_SENHA`. Conferir `stat -c '%a' infra/.env` = `600`.
+- [ ] Acrescentar ao `infra/.env` (ver `infra/.env.example`): `POSTGRES_ADMIN_USUARIO`, `POSTGRES_ADMIN_SENHA`, `POSTGRES_BIND_IP=<tailscale ip -4>` (ou `127.0.0.1`, se a P15 escolher `tailscale serve --tcp=5432`; nunca `0.0.0.0`), `POSTGRES_INGESTOR_SENHA`. Conferir `stat -c '%a' infra/.env` = `600`.
 - [ ] `docker compose -f infra/docker-compose.yml up -d --wait postgres`.
 - [ ] `docker compose -f infra/docker-compose.yml build jobs`.
 - [ ] Migrar: `docker compose -f infra/docker-compose.yml run --rm -e DATABASE_URL=$DATABASE_URL_ADMIN jobs alembic upgrade head` — ou, mais simples, `... run --rm jobs alembic upgrade head` (o `env.py` prefere `DATABASE_URL_ADMIN`, que o serviço `jobs` já recebe).
 - [ ] Definir as senhas dos papéis (a migração cria os papéis sem senha, de propósito). Rodar sem deixar a senha no histórico do shell (por exemplo, com `read -s` antes):
   `docker compose -f infra/docker-compose.yml exec postgres psql -U <admin> -d ml -c "ALTER ROLE ingestor PASSWORD '<senha>'"` (repetir para `cientista`, `scorer`, `leitura`).
-- [ ] Tailscale: convidar a cientista para a tailnet (ou compartilhar a máquina com ela, "Share" no painel). Na ACL, liberar para ela só `vps:5432` agora (MLflow entra na Fase 3).
+- [ ] Tailscale: convidar a cientista para a tailnet (ou compartilhar a máquina com ela, "Share" no painel). Na ACL, liberar para ela só `tag:plataforma:5432` agora (MLflow e Prefect entram no item 31, Grafana no 50). A ACL é o único controle de acesso da rede: não há proxy com senha.
 - [ ] Enviar a ela, por canal seguro, usuário `cientista`, senha, host (`<nome>.ts.net`), porta 5432, banco `ml`.
 
 ## Verificação de pronto
@@ -34,4 +34,5 @@ Na VPS, como `deploy`, em `/opt/plataforma`:
 
 Teste de reboot:
 
-- [ ] `sudo reboot`; depois, sem entrar na VPS, o `psql` dela volta a funcionar e `curl https://<dominio>/saude` responde `ok`. Se o Postgres não subir por falta do IP do Tailscale, ver P15 no índice.
+- [ ] `sudo reboot`; depois, sem entrar na VPS, o `psql` dela volta a funcionar e `curl -s https://<host>.ts.net:8080/saude` responde `ok`. Se o Postgres não subir por falta do IP do Tailscale, ver P15 no índice.
+- [ ] Na VPS: `docker ps --format '{{.Names}} {{.Ports}}' | grep -c '0\.0\.0\.0'` → `0`.

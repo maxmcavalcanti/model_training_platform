@@ -2,7 +2,7 @@
 
 > Executa: agente. Depende de: 09. Branch sugerida: `feat/raw-clima-previsao`.
 > Pré-requisitos: ADR "Contrato de dados v1" (PR 09) aprovado, com a decisão P8 (semântica de `emitida_em`) registrada.
-> **Antecipado**: item da Fase 2 feito antes do fim da Fase 1, porque cada dia sem coleta é histórico perdido (decisão P5 no índice).
+> **Antecipado**: item da Fase 2 feito antes do fim da Fase 1, porque cada dia sem coleta é histórico perdido (desvio de "uma fase por vez" aprovado pelo usuário em 2026-11-07, P5 resolvida).
 > TDD: test-writer (vermelho) → implementação (verde) → refatorar.
 
 ## 1. Objetivo

@@ -36,7 +36,7 @@ Pré-requisito da Fase 0 (`docs/plataforma-ml.md`, seção "Roadmap"). O roadmap
 
 ## 5. Passos
 
-1. Confirme que o `uv` está instalado: `uv --version`. Se não estiver, pare e reporte (pergunta em aberto P1 no índice).
+1. Confirme que o `uv` está instalado: `uv --version`. Se não estiver, pare e reporte ao usuário (a toolchain foi aprovada em 2026-11-07, P1 resolvida; falta só a instalação).
 2. Crie `.python-version` com o conteúdo `3.12`.
 3. Crie `pyproject.toml`:
    - `[project]`: `name = "plataforma"`, `version = "0.1.0"`, `requires-python = ">=3.12,<3.13"`, `dependencies = []`.
@@ -88,7 +88,8 @@ n/a
 
 ## 9. Riscos e perguntas em aberto
 
-- P1 (usuário): o `uv` está instalado na máquina de desenvolvimento? No Windows: `powershell -c "irm https://astral.sh/uv/install.ps1 | iex"`.
+- Toolchain aprovada pelo usuário em 2026-11-07 (P1 resolvida): uv, ruff, pytest, hatchling, Python 3.12, CI no GitHub Actions. Se o `uv` não estiver instalado no Windows: `powershell -c "irm https://astral.sh/uv/install.ps1 | iex"`.
+- Os repositórios são públicos (P2 resolvida): qualquer segredo commitado, mesmo apagado depois, fica no histórico público. Se acontecer, troque o segredo; reescrever o histórico não basta. O `.gitignore` da `main` já exclui `.env`; não o enfraqueça neste PR.
 - Python 3.12 foi escolhido por ser a versão do guia da ciência de dados (`docs/guia-ciencia-de-dados.md`, "Ferramentas") e por ser suportada por Prefect 3 e MLflow. Mesma versão nos dois repos evita surpresa no job de score.
 - Por que uv: um binário só, gerencia a versão do Python, lockfile multiplataforma, `uv run --with` (útil no PR 44), action oficial no GitHub. Alternativas consideradas: Poetry (mais lento, não gerencia Python), pip-tools (sem gestão de Python, dois arquivos de lock).
 - Por que hatchling com `packages = ["ingestion", "flows"]`: mantém a árvore de pastas do doc (pastas na raiz, não `src/`) e deixa os pacotes importáveis no venv e na imagem Docker.
@@ -96,4 +97,4 @@ n/a
 
 ## 10. Decisões que exigem ADR
 
-- ADR "Toolchain Python: uv, ruff, pytest, hatchling e layout de pacotes na raiz". O usuário aprova a escolha antes do merge (P1 no índice).
+- ADR "Toolchain Python: uv, ruff, pytest, hatchling e layout de pacotes na raiz". A escolha já foi aprovada pelo usuário em 2026-11-07 (P1 resolvida); o ADR só a registra e precisa estar mergeado antes deste PR.

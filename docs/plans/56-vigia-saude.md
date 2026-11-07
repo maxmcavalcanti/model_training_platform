@@ -5,7 +5,7 @@
 
 ## 1. Objetivo
 
-Criar um flow `vigiar_saude`, a cada 15 minutos, que checa uso de disco da VPS e a saúde de Caddy, MLflow, Prefect, Grafana e Postgres, e manda alerta no Telegram quando algo passa do limite.
+Criar um flow `vigiar_saude`, a cada 15 minutos, que checa uso de disco da VPS e a saúde de `saude`, MLflow, Prefect, Grafana e Postgres, e manda alerta no Telegram quando algo passa do limite.
 Avisa uma vez por problema (não a cada 15 minutos) e avisa quando volta ao normal.
 
 ## 2. Fora do escopo
@@ -30,7 +30,7 @@ Do doc: "Alertas: … disco acima de 80%, serviço fora do ar → Telegram".
 
 Código existente: `flows/alertas.py` (`enviar_telegram`, `ao_falhar`), `flows/deployments.py`.
 
-Alvos de saúde (rede interna do compose): `http://mlflow:5000/health` (corpo `OK`), `http://prefect-server:4200/api/health` (`true`), `http://grafana:3000/api/health` (`"database": "ok"`), `https://<DOMINIO>/saude` pelo Caddy (`ok`), Postgres com `SELECT 1` usando `DATABASE_URL`.
+Alvos de saúde (rede interna do compose): `http://mlflow:5000/health` (corpo `OK`), `http://prefect-server:4200/api/health` (`true`), `http://grafana:3000/api/health` (`"database": "ok"`), `http://saude:8080/saude` (`ok`), Postgres com `SELECT 1` usando `DATABASE_URL`.
 
 ## 5. Passos
 
@@ -60,7 +60,7 @@ Alvos de saúde (rede interna do compose): `http://mlflow:5000/health` (corpo `O
 1. Disco em 85% e nenhum problema aberto → um alerta com `disco` e `85%`.
 2. Execução seguinte, ainda 85% → nenhum alerta novo.
 3. Execução seguinte, 60% → um alerta `RESOLVIDO` de disco.
-4. MLflow respondendo 502 → alerta citando `mlflow`; Prefect, Grafana e Caddy saudáveis não geram alerta.
+4. MLflow respondendo 502 → alerta citando `mlflow`; Prefect, Grafana e `saude` saudáveis não geram alerta.
 5. Alvo que estoura o timeout → tratado como fora do ar.
 6. Postgres recusando conexão → alerta citando `postgres`.
 7. Tudo saudável → nenhum alerta; flow `Completed`.
@@ -68,7 +68,8 @@ Alvos de saúde (rede interna do compose): `http://mlflow:5000/health` (corpo `O
 
 ## 9. Riscos e perguntas em aberto
 
-- Se o Prefect (server ou worker) cair, o vigia não roda e ninguém é avisado. Cobrir com um monitor externo gratuito (ex.: um serviço de uptime batendo em `https://<dominio>/saude` e em um endpoint de "heartbeat") é decisão do usuário (P17).
+- Se o Prefect (server ou worker) cair, o vigia não roda e ninguém é avisado. Com rede só Tailscale, um monitor externo não alcança a VPS; a opção compatível é um heartbeat de saída: o vigia faz um `GET` numa URL de um serviço tipo healthchecks.io a cada execução, e o serviço avisa quando o ping para de chegar. Decisão do usuário (P17); se aprovada, a URL do ping é segredo e vai no `.env`.
+- Memória: o vigia também pode checar `MemAvailable` de `/proc/meminfo` do host contra os gatilhos do 28b. Fora deste PR; perguntar.
 - Montar `/` do host no worker, mesmo somente leitura, expõe arquivos do host ao container. Alternativa: montar só a partição de dados do Docker. Confirmar.
 
 ## 10. Decisões que exigem ADR

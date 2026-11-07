@@ -1,7 +1,7 @@
 # 17 — Ligar a coleta diária de `raw.clima_previsao` na VPS (manual)
 
 > Executa: **usuário**. Depende de: 12, 13, 15, 16 (merges na `main`).
-> Fase do roadmap: Fase 2 (antecipada, decisão P5). É o item mais urgente do roadmap: cada dia antes dele é histórico que não volta.
+> Fase do roadmap: Fase 2 (antecipada; desvio de "uma fase por vez" aprovado pelo usuário em 2026-11-07, P5 resolvida). É o item mais urgente do roadmap: cada dia antes dele é histórico que não volta.
 
 ## Checklist
 

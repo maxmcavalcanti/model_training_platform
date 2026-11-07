@@ -38,4 +38,9 @@ Criar bot e bucket exige contas externas; instalar units systemd e testar restor
 | Dia seguinte | Mesmo painel, sem nenhuma ação | Um ponto novo (atualizou sozinho) |
 | Telegram | Simular disco cheio não é prático; parar o MLflow por 20 min (`docker compose stop mlflow`) | Alerta `mlflow` e depois `RESOLVIDO` ao subir de novo (`docker compose start mlflow`) |
 
+Memória (mesmos comandos e gatilhos do 28a):
+
+- [ ] Com a stack desta fase no ar, em repouso e durante um job: `free -m`, `docker stats --no-stream`, `vmstat 5 12`, `sudo dmesg -T | grep -i -E 'out of memory|killed process'`. Anote os números.
+- [ ] Se um gatilho do 28b disparar (`available` abaixo de ~150 MB, swap em uso constante ou OOM do kernel), faça o 28b antes do próximo PR que acrescenta serviço. Sem gatilho, segue em 1 GB.
+
 Parar o MLflow à mão é uma intervenção em produção para teste; combinar a janela com a cientista. Com tudo acima, o roadmap das Fases 0 a 5 está completo.

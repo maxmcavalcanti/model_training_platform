@@ -29,7 +29,7 @@ Fase 5 — "Alertas no Telegram, backups com restore testado".
 | `infra/systemd/plataforma-backup.service`, `.timer`, `plataforma-backup-falhou.service` | Agenda diária no host e aviso de falha no Telegram |
 | `infra/.env.example` | `RCLONE_DESTINO`, `RCLONE_CONFIG_*` (fictícios), `BACKUP_RETENCAO_DIAS=14` |
 | `tests/infra/test_backup_restore.py` | Teste de ida e volta (test-writer) |
-| `.github/workflows/ci.yml` | `shellcheck infra/backup/*.sh` (o passo de `infra/scripts` do PR 39 pode ser ampliado) |
+| `.github/workflows/ci.yml` | `shellcheck infra/backup/*.sh` (o passo de `shellcheck` criado no PR 03 pode ser ampliado) |
 
 Do doc: "Backups: `pg_dump` diário dos três bancos + volume de artefatos do MLflow, enviados para fora da VPS (S3 ou Backblaze B2), retenção de 14 dias; testar um restore uma vez por mês". Regra: "Backup sem restore testado não conta como backup."
 
@@ -43,7 +43,7 @@ Do doc: "Backups: `pg_dump` diário dos três bancos + volume de artefatos do ML
    - `rclone copy <dir> "$RCLONE_DESTINO/<AAAA-MM-DD>/"`; depois `rclone delete --min-age "${BACKUP_RETENCAO_DIAS}d" "$RCLONE_DESTINO"` e `rclone rmdirs --leave-root "$RCLONE_DESTINO"`.
    - Imprime `backup ok <data> <tamanhos>`.
 3. `restore.sh <AAAA-MM-DD>`: valida a data; `rclone copy "$RCLONE_DESTINO/<data>/" <tmp>`; para cada banco, `pg_restore --clean --if-exists --no-owner -d <banco>`; extrai os artefatos em `/artefatos` (que no restore é montado com escrita). Imprime `restore ok <data>`.
-4. Compose: serviço `backup` com `build: ./backup`, `profiles: ["jobs"]`, `restart: "no"`, `environment` com o usuário admin e `RCLONE_*`, volume `mlflow_artifacts:/artefatos:ro`.
+4. Compose: serviço `backup` com `build: ./backup`, `profiles: ["jobs"]`, `restart: "no"`, `mem_limit: 256m`, `environment` com o usuário admin e `RCLONE_*`, volume `mlflow_artifacts:/artefatos:ro`.
 5. Units systemd: `plataforma-backup.service` (`Type=oneshot`, `ExecStart=/usr/bin/docker compose -f /opt/plataforma/infra/docker-compose.yml run --rm backup`, `OnFailure=plataforma-backup-falhou.service`); `.timer` às 03:00 (`OnCalendar=*-*-* 03:00:00`, `Persistent=true`); `plataforma-backup-falhou.service` chama `curl` para a API do Telegram com `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` lidos de `EnvironmentFile=/opt/plataforma/infra/.env`.
 6. Rode os critérios de pronto.
 

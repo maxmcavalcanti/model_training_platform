@@ -12,7 +12,7 @@ A troca precisa ser observada em produção por pelo menos um dia antes de desli
 - [ ] Na VPS, em `/opt/plataforma`: `git pull`; `docker compose -f infra/docker-compose.yml build jobs prefect-worker agendador`.
 - [ ] `docker compose -f infra/docker-compose.yml up -d prefect-worker`.
 - [ ] `docker compose -f infra/docker-compose.yml run --rm jobs python -m flows.deployments`.
-- [ ] Na UI do Prefect (`https://prefect.<dominio>`): os três deployments `.../producao` aparecem com agenda e fuso `America/Sao_Paulo`; o work pool `plataforma` tem um worker `Online`.
+- [ ] Na UI do Prefect (`https://<host>.ts.net:4200`, pela tailnet): os três deployments `.../producao` aparecem com agenda e fuso `America/Sao_Paulo`; o work pool `plataforma` tem um worker `Online`.
 - [ ] Disparar uma vez à mão pela UI o `ingest_clima_observado/producao` e ver `Completed`.
 - [ ] Esperar o dia seguinte com **os dois** agendadores ligados.
 
@@ -28,3 +28,9 @@ No dia seguinte, depois das 07:10 BRT:
 
 - [ ] Se tudo bateu, liberar o merge do PR 36 (remover o agendador).
 - [ ] Teste de reboot: `sudo reboot`; worker volta `Online` na UI sem intervenção.
+
+Memória (mesmos comandos e gatilhos do 28a):
+
+- [ ] Com a stack desta fase no ar, em repouso e durante um job: `free -m`, `docker stats --no-stream`, `vmstat 5 12`, `sudo dmesg -T | grep -i -E 'out of memory|killed process'`. Anote os números.
+- [ ] Se um gatilho do 28b disparar (`available` abaixo de ~150 MB, swap em uso constante ou OOM do kernel), faça o 28b antes do próximo PR que acrescenta serviço. Sem gatilho, segue em 1 GB.
+- [ ] Com os dois agendadores ligados ao mesmo tempo (supercronic e worker), o pico de memória é maior que o normal; meça também nesse dia.

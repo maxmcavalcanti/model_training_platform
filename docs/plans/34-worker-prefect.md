@@ -30,7 +30,7 @@ Código existente: `flows/deployments.py` (`POOL = "plataforma"`, `registrar()`,
 
 1. (test-writer) Casos da seção 8. Confirme falha. Commit `test: add prefect worker compose tests`.
 2. (implementer) Serviço `prefect-worker`:
-   - Mesmo `build` do `jobs`; `command: ["prefect", "worker", "start", "--pool", "plataforma", "--type", "process"]`; `restart: unless-stopped`; sem `ports`; `depends_on: prefect-server` saudável e `postgres` saudável.
+   - Mesmo `build` do `jobs`; `command: ["prefect", "worker", "start", "--pool", "plataforma", "--type", "process"]`; `restart: unless-stopped`; `mem_limit: 384m` (parte do worker na estimativa de 500–800 MB de server + worker; os flows rodam como subprocesso dentro deste container, então o limite cobre o pico do job com pandas; ajuste pelo 28a); sem `ports`; `depends_on: prefect-server` saudável e `postgres` saudável.
    - `environment`: o mesmo do `jobs` (`DATABASE_URL` com `ingestor`), mais `PREFECT_API_URL: http://prefect-server:4200/api`.
 3. No serviço `jobs`, acrescente `PREFECT_API_URL: http://prefect-server:4200/api`, para registrar deployments com `docker compose run --rm jobs python -m flows.deployments`.
 4. `ci.yml`, no smoke: subir `postgres`, `prefect-server`, `prefect-worker`; `run --rm jobs python -m flows.deployments`; disparar `run --rm jobs prefect deployment run ingest_ons_carga/producao --param dias=1` não serve (precisa de rede e banco migrado); em vez disso, confira só que o worker aparece: `run --rm jobs prefect work-pool inspect plataforma` contém `plataforma` e, nos logs do worker, `Worker ... started`.
@@ -52,9 +52,9 @@ Código existente: `flows/deployments.py` (`POOL = "plataforma"`, `registrar()`,
 
 ## 8. Casos de teste
 
-1. `prefect-worker` tem `restart: unless-stopped`, sem `ports`.
+1. `prefect-worker` tem `restart: unless-stopped` e `mem_limit`, sem `ports`.
 2. `prefect-worker` usa a mesma imagem/`build` que `jobs` (código idêntico).
-3. `PREFECT_API_URL` do worker e do `jobs` é `http://prefect-server:4200/api` (rede interna, não o domínio público).
+3. `PREFECT_API_URL` do worker e do `jobs` é `http://prefect-server:4200/api` (rede interna do compose, não a URL da tailnet).
 4. `DATABASE_URL` do worker usa `ingestor`.
 5. O `command` do worker contém `--pool plataforma` e o pool é o mesmo `POOL` de `flows/deployments.py` (o teste importa a constante).
 

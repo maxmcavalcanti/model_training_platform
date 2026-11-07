@@ -39,10 +39,10 @@ Fase 1 — Banco e carga do ONS: "Postgres, migrações com Alembic, usuários e
    - Fixture de sessão `banco_teste` que cria `ml_test_<8 hex aleatórios>` com `AUTOCOMMIT`, devolve a URL do banco novo e, no fim, faz `DROP DATABASE ... WITH (FORCE)`.
    - Se o servidor não responder, a fixture **falha** (não pula) com a mensagem: `Postgres de teste indisponível: rode docker compose -f infra/docker-compose.dev.yml up -d`.
    - Escreva `tests/test_db.py` com os casos da seção 8, marcados `@pytest.mark.db` os que usam banco.
-   - Atualize `tests/infra/test_compose.py`: lista de serviços com porta permitida passa a ser `caddy`, `postgres`.
+   - Atualize `tests/infra/test_compose.py`: lista de serviços com porta permitida passa a ser `saude`, `postgres`.
    - Rode `uv run pytest tests/test_db.py` e confirme falha por `ModuleNotFoundError: ingestion.db` (comportamento ausente). Commit `test: add db connection tests`.
 2. (implementer) Crie `infra/docker-compose.dev.yml`:
-   - `name: plataforma-dev`; serviço `postgres`, imagem `postgres:16.<minor>` (fixe a minor atual), `restart: unless-stopped`, `environment: POSTGRES_PASSWORD: ${POSTGRES_DEV_PASSWORD:-postgres}`, `ports: ["${DEV_BIND_IP:-127.0.0.1}:5432:5432"]`, `healthcheck` com `pg_isready -U postgres`.
+   - `name: plataforma-dev`; serviço `postgres`, imagem `postgres:16.<minor>` (fixe a minor atual), `restart: unless-stopped`, `mem_limit: 512m` (o teste geral do PR 03 exige `mem_limit` em todo compose, inclusive o de dev), `environment: POSTGRES_PASSWORD: ${POSTGRES_DEV_PASSWORD:-postgres}`, `ports: ["${DEV_BIND_IP:-127.0.0.1}:5432:5432"]`, `healthcheck` com `pg_isready -U postgres`.
 3. Crie `ingestion/db.py` com:
    - `class ConfiguracaoAusente(RuntimeError)`.
    - `def criar_engine(url: str | None = None) -> sqlalchemy.Engine`: usa `url` ou a variável `DATABASE_URL`; se nenhuma, levanta `ConfiguracaoAusente("DATABASE_URL não definida")`; se a URL começar com `postgresql://`, troca para `postgresql+psycopg://`; `pool_pre_ping=True`.
@@ -78,7 +78,7 @@ Fase 1 — Banco e carga do ONS: "Postgres, migrações com Alembic, usuários e
 
 ## 9. Riscos e perguntas em aberto
 
-- P1: no Windows o desenvolvedor precisa de Docker Desktop para os testes `db`. Sem Docker, `uv run pytest -m "not db"` continua útil, mas o CI é a fonte da verdade.
+- Toolchain aprovada pelo usuário em 2026-11-07 (P1 resolvida). No Windows o desenvolvedor precisa de Docker Desktop para os testes `db`; confirme com `docker version` antes do passo 1. Sem Docker, `uv run pytest -m "not db"` continua útil, mas o CI é a fonte da verdade.
 - Por que banco temporário por sessão em vez de transação por teste: as migrações (PR 06) e os papéis (PR 07) precisam de DDL real e de `SET ROLE`, que ficam frágeis dentro de transação revertida.
 - Papéis do Postgres são globais ao servidor; testes que criam papéis (PR 07) não podem rodar em paralelo no mesmo servidor. Não adicionar `pytest-xdist` sem rever isso.
 

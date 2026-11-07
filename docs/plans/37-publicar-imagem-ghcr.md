@@ -66,7 +66,8 @@ Regra (`.claude/rules/infra.md`): "Deploy só sai de merge na `main`. Nada de SS
 
 ## 9. Riscos e perguntas em aberto
 
-- P2: se o repositório for privado, o pacote do GHCR também é; a VPS precisa de um token de leitura (item 38).
+- P2 resolvida (2026-11-07): repositórios públicos; a VPS puxa as imagens do GHCR sem `docker login` e sem token. Atenção: o pacote do GHCR pode nascer privado mesmo com o repo público; o item 38 confere a visibilidade e a torna pública. O `GITHUB_TOKEN` do workflow só escreve no GHCR e nunca sai do Actions.
+- Imagem pública: nada de segredo em camada da imagem (sem `.env`, sem `ARG` com senha). O `.dockerignore` deve excluir `.env` e `infra/.env`; confira.
 - A partir daqui, `build` na VPS não deve mais ser usado; o item 38 troca o fluxo manual por `pull`.
 
 ## 10. Decisões que exigem ADR

@@ -49,7 +49,7 @@ Fase 1 — infraestrutura necessária para "Ingestão do ONS" e para as migraç�
    - Usuário não-root (`useradd -m app`, `USER app`).
    - Sem `ENTRYPOINT` fixo; `CMD ["python", "-m", "ingestion", "--help"]`.
 5. Serviço `jobs` no `infra/docker-compose.yml`:
-   - `build: {context: .., dockerfile: infra/jobs/Dockerfile}`, `profiles: ["jobs"]`, `restart: "no"`, `depends_on: {postgres: {condition: service_healthy}}`.
+   - `build: {context: .., dockerfile: infra/jobs/Dockerfile}`, `profiles: ["jobs"]`, `restart: "no"`, `mem_limit: 512m` (pico estimado do job com pandas: 200–400 MB, a medir no checkpoint 28a), `depends_on: {postgres: {condition: service_healthy}}`.
    - `environment`: `DATABASE_URL: postgresql+psycopg://ingestor:${POSTGRES_INGESTOR_SENHA}@postgres:5432/ml`, `DATABASE_URL_ADMIN: postgresql+psycopg://${POSTGRES_ADMIN_USUARIO}:${POSTGRES_ADMIN_SENHA}@postgres:5432/ml`.
    - Sem `ports`.
 6. `.github/workflows/ci.yml`: passo `docker build -f infra/jobs/Dockerfile -t plataforma-jobs:ci .` e `docker run --rm plataforma-jobs:ci python -m ingestion --help`.
@@ -83,13 +83,13 @@ Fase 1 — infraestrutura necessária para "Ingestão do ONS" e para as migraç�
 3. `main(["nao-existe"])` sai com código 2.
 4. Um subcomando registrado no teste (por `monkeypatch` em `SUBCOMANDOS`) que devolve 0 → `main` devolve 0.
 5. Um subcomando de teste que levanta `RuntimeError("boom")` → `main` devolve 1 e o stderr contém `boom` e `Traceback`.
-6. Compose: o serviço `jobs` está no profile `jobs`, não publica porta e não tem `restart: unless-stopped` (é execução única). A regra geral de restart continua valendo para todos os serviços sem profile.
+6. Compose: o serviço `jobs` está no profile `jobs`, não publica porta, tem `mem_limit` e não tem `restart: unless-stopped` (é execução única). A regra geral de restart continua valendo para todos os serviços sem profile.
 7. Compose: `DATABASE_URL` do `jobs` usa o usuário `ingestor`, não o admin.
 
 ## 9. Riscos e perguntas em aberto
 
 - P7: `.claude/rules/infra.md` diz "Todo serviço no compose tem `restart: unless-stopped`". O `jobs` é execução única e com essa política ficaria reiniciando em loop. Este plano trata serviços em `profiles` como exceção. Confirmar com o usuário; alternativa é tirar o `jobs` do compose e usar `docker run` com a rede do compose.
-- O build na VPS (até o PR 37) usa CPU e disco da própria VPS; para este tamanho de imagem é aceitável.
+- O build na VPS (até o PR 37) usa CPU, memória e disco da própria VPS (1 vCPU, 1 GB de RAM + 2 GB de swap, 25 GB de SSD). Para este tamanho de imagem é aceitável, mas o build é lento e pode usar swap; não rode build com o job agendado em execução.
 
 ## 10. Decisões que exigem ADR
 

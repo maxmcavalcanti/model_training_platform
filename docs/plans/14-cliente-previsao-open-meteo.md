@@ -1,7 +1,7 @@
 # 14 — Cliente da previsão do Open-Meteo (com retry)
 
 > Executa: agente. Depende de: 08 (usa pandas). Branch sugerida: `feat/openmeteo-previsao`.
-> **Antecipado** (Fase 2 antes do fim da Fase 1, decisão P5).
+> **Antecipado** (Fase 2 antes do fim da Fase 1; desvio de "uma fase por vez" aprovado pelo usuário em 2026-11-07, P5 resolvida).
 > TDD: passo 0 (dependências) → test-writer (vermelho) → implementação (verde) → refatorar.
 
 ## 1. Objetivo

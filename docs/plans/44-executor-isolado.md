@@ -24,7 +24,7 @@ Fase 4 — "Job genérico de score lendo `@champion`".
 | --- | --- |
 | `flows/executor.py` | `ExecucaoFalhou`, `especificacao_pacote(versao)`, `montar_comando(versao, modulo_python, args)`, `executar(comando, *, env_extra)` |
 | `infra/jobs/Dockerfile` | Instalar `git` (para `git+https`); `UV_CACHE_DIR` gravável pelo usuário `app` |
-| `infra/.env.example` | `MODELOS_REPO=https://github.com/<dono>/modelos`, `MODELOS_GIT_TOKEN=` (vazio se público) |
+| `infra/.env.example` | `MODELOS_REPO=https://github.com/<dono>/modelos` (repo público, P2 resolvida: sem token) |
 | `tests/fixtures/modelos_fake/` | Pacote instalável mínimo chamado `modelos` com `src/modelos/teste_fake/__init__.py` (test-writer) |
 | `tests/test_executor.py` | Testes (test-writer) |
 
@@ -39,7 +39,7 @@ Por que `uv run --with` (ver PR 01): cria um ambiente efêmero em cache, sobrepo
    - `especificacao_pacote(versao: str) -> str`: se `MODELOS_FONTE_LOCAL` estiver definida (testes e desenvolvimento), devolve esse caminho; senão `f"modelos @ git+{MODELOS_REPO}@{versao}"`. `versao` deve casar `^v?\d+\.\d+\.\d+([-.+][0-9A-Za-z.]+)?$`; senão `ValueError`.
    - `montar_comando(versao, modulo_python, args) -> list[str]`: `["uv", "run", "--frozen", "--with", especificacao_pacote(versao), "python", "-m", modulo_python, *args]`.
    - `executar(comando, *, env_extra=None) -> None`: roda com `subprocess.run`, repassa stdout/stderr linha a linha para o logger; código ≠ 0 → `ExecucaoFalhou(codigo, ultimas_linhas_stderr)` (últimas 50 linhas, onde está o traceback dela).
-   - Token: se `MODELOS_GIT_TOKEN` existir, passa ao subprocesso por variáveis de config do git (`GIT_CONFIG_COUNT=1`, `GIT_CONFIG_KEY_0=url.https://x-access-token:<token>@github.com/.insteadOf`, `GIT_CONFIG_VALUE_0=https://github.com/`), nunca na linha de comando; e qualquer ocorrência do token em mensagens de log ou de exceção é trocada por `***`.
+   - Sem token de leitura: o repo `modelos` é público (decisão do usuário, 2026-11-07, P2 resolvida). Não implemente suporte a token.
 3. `infra/jobs/Dockerfile`: `apt-get install -y --no-install-recommends git`; `ENV UV_CACHE_DIR=/home/app/.cache/uv`.
 4. Rode os critérios de pronto.
 
@@ -55,7 +55,7 @@ Por que `uv run --with` (ver PR 01): cria um ambiente efêmero em cache, sobrepo
 
 ## 7. Testes necessários
 
-`sim`: isolamento de versões, propagação do traceback e não vazar o token são os requisitos de segurança e de operação deste mecanismo.
+`sim`: isolamento de versões, validação da versão e propagação do traceback são os requisitos de segurança e de operação deste mecanismo.
 
 ## 8. Casos de teste
 
@@ -63,13 +63,14 @@ Por que `uv run --with` (ver PR 01): cria um ambiente efêmero em cache, sobrepo
 2. `versao = "main; rm -rf /"` → `ValueError`.
 3. Com `MODELOS_FONTE_LOCAL` apontando para a fixture: `executar(montar_comando("v0.0.1", ...))` de um módulo que importa `modelos.teste_fake` → termina sem exceção.
 4. Comando que levanta `ZeroDivisionError` no subprocesso → `ExecucaoFalhou` com código 1 e a mensagem contém `ZeroDivisionError` e `Traceback`.
-5. Com `MODELOS_GIT_TOKEN=segredo123`: o comando montado não contém `segredo123`; o ambiente passado ao subprocesso contém `GIT_CONFIG_KEY_0` com o token; um erro do subprocesso que imprime `segredo123` vira `***` na `ExecucaoFalhou`.
+5. `MODELOS_REPO` que não começa com `https://github.com/` (ex.: `https://x-access-token:abc@github.com/x/modelos`) → `ValueError`: credencial nunca entra na URL do pacote.
 6. O pacote da fixture não fica importável no ambiente do teste depois da execução (`importlib.util.find_spec("modelos")` é `None`).
 
 ## 9. Riscos e perguntas em aberto
 
 - Conflito de dependências entre o pacote dela e o da plataforma (ex.: versões de `pandas`) faz o `uv run --with` falhar. Isso aparece como `ExecucaoFalhou` do modelo dela; o ADR deve dizer quem resolve.
-- Primeira execução de cada versão baixa e instala o pacote (segundos a minutos). Depois fica em cache no `UV_CACHE_DIR`; considerar volume para o cache no worker.
+- Primeira execução de cada versão baixa e instala o pacote (segundos a minutos). Depois fica em cache no `UV_CACHE_DIR`; considerar volume para o cache no worker. Disco de 25 GB: o cache cresce com cada versão; limpar versões antigas (`uv cache prune`) se `df -h /` passar de 60%.
+- Memória: cada modelo roda num subprocesso Python próprio dentro do `prefect-worker` (`mem_limit` do PR 34). Rodar os modelos em sequência, não em paralelo, enquanto a VPS tiver 1 GB.
 
 ## 10. Decisões que exigem ADR
 

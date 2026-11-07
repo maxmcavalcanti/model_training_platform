@@ -1,7 +1,7 @@
 # 15 — Job `clima-previsao`: snapshot diário, checagem e CLI
 
 > Executa: agente. Depende de: 11, 13, 14. Branch sugerida: `feat/job-clima-previsao`.
-> **Antecipado** (Fase 2 antes do fim da Fase 1, decisão P5).
+> **Antecipado** (Fase 2 antes do fim da Fase 1; desvio de "uma fase por vez" aprovado pelo usuário em 2026-11-07, P5 resolvida).
 > TDD: test-writer (vermelho) → implementação (verde) → refatorar.
 
 ## 1. Objetivo
