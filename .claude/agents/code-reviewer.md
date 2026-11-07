@@ -13,7 +13,7 @@ Leia `AGENTS.md` e as regras de `.claude/rules/` que se aplicam aos arquivos alt
 
 Procure, nesta ordem:
 
-1. **Correção:** bugs, casos de borda, jobs que não são idempotentes, upsert faltando, `ingerido_em` ausente, checagem de qualidade ausente.
+1. **Correção:** bugs, casos de borda, jobs que não são idempotentes, upsert faltando, `ingested_at` ausente, checagem de qualidade ausente.
 2. **Fronteira:** mudança em `raw` ou `ref` sem migração Alembic + ADR + aviso à ciência de dados, mudança na assinatura do contrato sem ADR, mudança que publica porta ou expõe serviço fora do tailnet/loopback sem ADR, permissão de usuário do Postgres errada.
 3. **Segurança:** segredo no código, serviço exposto sem auth, porta nova aberta.
 4. **Testes:** o comportamento novo tem teste que falharia sem ele? Os testes verificam o comportamento do plano ou só espelham a implementação?
