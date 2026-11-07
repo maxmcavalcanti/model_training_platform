@@ -15,8 +15,8 @@ ONS (bucket público `ons-aws-prod-opendata`, prefixo `dataset/carga_energia_di/
   `curl -s "https://ons-aws-prod-opendata.s3.amazonaws.com/?list-type=2&prefix=dataset/carga_energia_di/" | grep -oE "<Key>[^<]+</Key>|<LastModified>[^<]+</LastModified>"`
 - [ ] Anotar o padrão de nome do arquivo anual em parquet (ex.: `CARGA_ENERGIA_<ANO>.parquet`) e se existe um por ano.
 - [ ] Baixar o do ano corrente e listar colunas e tipos:
-  `curl -s -o /tmp/carga.parquet "https://ons-aws-prod-opendata.s3.amazonaws.com/<Key>"` e
-  `uv run --with pandas --with pyarrow python -c "import pandas as pd; d=pd.read_parquet('/tmp/carga.parquet'); print(d.dtypes); print(d.tail(8)); print(sorted(d.iloc[:,0].unique()))"`
+  `curl -s -o /tmp/load.parquet "https://ons-aws-prod-opendata.s3.amazonaws.com/<Key>"` e
+  `uv run --with pandas --with pyarrow python -c "import pandas as pd; d=pd.read_parquet('/tmp/load.parquet'); print(d.dtypes); print(d.tail(8)); print(sorted(d.iloc[:,0].unique()))"`
 - [ ] Anotar: nome da coluna de subsistema e os códigos (esperado `SE`, `S`, `NE`, `N`), coluna de data, coluna de carga em MWmed.
 - [ ] Atraso: em 3 dias diferentes, por volta das 07:00 BRT, anotar a última data presente no arquivo do ano. Resultado: "o dia D−1 está disponível às __:__".
 - [ ] Revisões: guardar o arquivo de hoje e comparar com o de daqui a 7 dias; anotar se valores de dias já publicados mudaram e até quantos dias para trás.

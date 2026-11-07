@@ -36,8 +36,8 @@ Alvos de saúde (rede interna do compose): `http://mlflow:5000/health` (corpo `O
 
 1. (test-writer) Testes da seção 8 com `httpx.MockTransport`, `shutil.disk_usage` falso via `monkeypatch` e `send_telegram` falso. Confirme falha. Commit `test: add health watcher tests`.
 2. (implementer) `flows/watchdog.py`:
-   - `check_disk(path="/host", threshold=0.80) -> Problema | None`.
-   - `check_services(client, targets) -> list[Problema]` com timeout de 5 s por alvo.
+   - `check_disk(path="/host", threshold=0.80) -> Problem | None`.
+   - `check_services(client, targets) -> list[Problem]` com timeout de 5 s por alvo.
    - Estado entre execuções: um `Variable` do Prefect (`prefect.variables.Variable`) com o conjunto de problemas abertos. Problema novo → alerta "ALERTA"; problema que sumiu → alerta "RESOLVIDO"; problema que continua → nada.
    - O flow termina `Completed` mesmo com problemas (o alerta já foi enviado; `Failed` dispararia `notify_failure` e duplicaria a mensagem). Não use `on_failure` neste flow além do padrão.
 3. Deployment `*/15 * * * *` e montagem do disco.

@@ -66,7 +66,7 @@ Arquivo esperado: `https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/carga_
 ## 8. Casos de teste
 
 1. Parquet com 2 dias × 4 subsistemas → 8 linhas com colunas exatamente `subsystem, date, load_avg_mw`.
-2. `din_instante` como timestamp `2026-11-05 00:00:00` → `date = date(2026, 11, 5)`.
+2. `din_instante` como timestamp `2026-11-05 00:00:00` → `target_date = date(2026, 11, 5)`.
 3. Parquet com linhas de `SIN` além dos 4 subsistemas → `SIN` descartado.
 4. Parquet sem `val_cargaenergiamwmed` → `ValueError` mencionando a coluna.
 5. `file_url(2015)` termina com `dataset/carga_energia_di/CARGA_ENERGIA_2015.parquet`.

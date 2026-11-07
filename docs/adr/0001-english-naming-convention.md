@@ -250,6 +250,20 @@ As demais branches dos planos já estão em inglês (`chore/bootstrap-dev-env`, 
 
 **M. Mantidos de propósito (não renomear):** os nomes externos do ONS e do Open-Meteo listados na seção 2; `America/Sao_Paulo`; ids das cidades; códigos de subsistema; `mape`, `mae`; `ml_test_`, `ml_ci`; caminhos de arquivo em `docs/` (`docs/plataforma-ml.md`, `plataforma-ml.md`, `docs/guia-ciencia-de-dados.md`, `00-indice.md`, `.claude/rules/migrations-e-dados.md`); placeholders em prosa.
 
+**N. Identificadores restantes (decididos na revisão da renomeação)**
+
+| Atual | Novo |
+| --- | --- |
+| `Problema` (classe do vigia) | `Problem` |
+| `codigo` (parâmetro de `RunFailed`) | `code` |
+| `/destino` (destino do rclone no container) | `/destination` |
+| `/artefatos` (montagem dos artefatos do MLflow) | `/artifacts` |
+| `/tmp/carga.parquet` | `/tmp/load.parquet` |
+| hostname de exemplo `exemplo.ts.net` | `example.ts.net` |
+| prefixo de alerta `[plataforma]` | `[platform]` |
+| `send_telegram('teste')` (mensagem de teste manual) | `send_telegram('test')` |
+| variáveis de painel do Grafana `$modelo`, `$metrica` | `$model_name`, `$metric` (iguais às colunas) |
+
 ## Consequências
 
 - Mudam os nomes de `raw` e `ref` e a assinatura do contrato (`build_features`, saída de `predict`, `evaluate`), e este ADR cobre essas mudanças. Como ainda não há tabela nem código, não há migração Alembic a fazer. A ciência de dados precisa ser avisada (`AGENTS.md`, "Fronteira"), em especial sobre os nomes de modelo (`load_d1`, `rain_d1`) e o pacote `models`.

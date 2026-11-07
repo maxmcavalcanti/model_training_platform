@@ -66,7 +66,7 @@ Modelo de acesso (recomendado; a escolha fina é o ADR da seção 10):
    - Reset + reaplicar deixa o script declarativo: o estado do `tailscale serve` na VPS é sempre o que está no git.
    - Confira a sintaxe exata contra `tailscale serve --help` da versão estável atual (documentação em tailscale.com/kb/1242/tailscale-serve). Se a sintaxe divergir, ajuste e registre no PR; não invente flags.
    - Nunca use `tailscale funnel` nem `--funnel`.
-5. Crie `infra/.env.example` com `HEALTH_BIND_IP=127.0.0.1` e `TS_HOSTNAME=platform.exemplo.ts.net`. Comentário no topo: "copie para infra/.env na VPS, chmod 600; nunca commite o .env; os repos são públicos, um segredo commitado uma vez fica público para sempre e precisa ser trocado. Nenhum *_BIND_IP pode ser 0.0.0.0".
+5. Crie `infra/.env.example` com `HEALTH_BIND_IP=127.0.0.1` e `TS_HOSTNAME=platform.example.ts.net`. Comentário no topo: "copie para infra/.env na VPS, chmod 600; nunca commite o .env; os repos são públicos, um segredo commitado uma vez fica público para sempre e precisa ser trocado. Nenhum *_BIND_IP pode ser 0.0.0.0".
 6. No `ci.yml`, adicione ao job existente (o runner `ubuntu-latest` já tem Docker e `shellcheck`):
    - `docker compose -f infra/docker-compose.yml --env-file infra/.env.example config -q`
    - `shellcheck infra/scripts/*.sh`

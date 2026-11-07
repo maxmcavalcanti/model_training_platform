@@ -38,7 +38,7 @@ Por que `uv run --with` (ver PR 01): cria um ambiente efêmero em cache, sobrepo
 2. (implementer) `flows/executor.py`:
    - `package_spec(version: str) -> str`: se `MODELS_LOCAL_SOURCE` estiver definida (testes e desenvolvimento), devolve esse caminho; senão `f"models @ git+{MODELS_REPO}@{version}"`. `version` deve casar `^v?\d+\.\d+\.\d+([-.+][0-9A-Za-z.]+)?$`; senão `ValueError`.
    - `build_command(version, python_module, args) -> list[str]`: `["uv", "run", "--frozen", "--with", package_spec(version), "python", "-m", python_module, *args]`.
-   - `run(command, *, extra_env=None) -> None`: roda com `subprocess.run`, repassa stdout/stderr linha a linha para o logger; código ≠ 0 → `RunFailed(codigo, stderr_tail)` (últimas 50 linhas, onde está o traceback dela).
+   - `run(command, *, extra_env=None) -> None`: roda com `subprocess.run`, repassa stdout/stderr linha a linha para o logger; código ≠ 0 → `RunFailed(code, stderr_tail)` (últimas 50 linhas, onde está o traceback dela).
    - Sem token de leitura: o repo `models` é público (decisão do usuário, 2026-11-07, P2 resolvida). Não implemente suporte a token.
 3. `infra/jobs/Dockerfile`: `apt-get install -y --no-install-recommends git`; `ENV UV_CACHE_DIR=/home/app/.cache/uv`.
 4. Rode os critérios de pronto.

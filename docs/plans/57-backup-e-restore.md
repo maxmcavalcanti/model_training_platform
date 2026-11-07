@@ -36,14 +36,14 @@ Do doc: "Backups: `pg_dump` diário dos três bancos + volume de artefatos do ML
 ## 5. Passos
 
 0. (implementer) Registre o marcador `docker: precisa de Docker para construir e rodar imagens` em `pyproject.toml`. Commit `build: add docker test marker`.
-1. (test-writer) `tests/infra/test_backup_restore.py` (`@pytest.mark.db`, `@pytest.mark.docker`): constrói a imagem `infra/backup/Dockerfile`; cria no servidor de teste três bancos temporários com uma tabela e linhas conhecidas; cria um diretório temporário fazendo papel do volume de artefatos com um arquivo conhecido; roda `backup.sh` no container com `--network host`, `RCLONE_DESTINATION=/destino` (diretório local montado: o rclone aceita caminho local) e as URLs dos bancos; apaga as tabelas e o arquivo; roda `restore.sh <data>`; confere as linhas e o arquivo. Casos na seção 8. Confirme falha porque a imagem não existe. Commit `test: add backup and restore round trip test`.
+1. (test-writer) `tests/infra/test_backup_restore.py` (`@pytest.mark.db`, `@pytest.mark.docker`): constrói a imagem `infra/backup/Dockerfile`; cria no servidor de teste três bancos temporários com uma tabela e linhas conhecidas; cria um diretório temporário fazendo papel do volume de artefatos com um arquivo conhecido; roda `backup.sh` no container com `--network host`, `RCLONE_DESTINATION=/destination` (diretório local montado: o rclone aceita caminho local) e as URLs dos bancos; apaga as tabelas e o arquivo; roda `restore.sh <data>`; confere as linhas e o arquivo. Casos na seção 8. Confirme falha porque a imagem não existe. Commit `test: add backup and restore round trip test`.
 2. (implementer) `backup.sh` (`set -euo pipefail`):
    - Para cada banco em `BACKUP_DATABASES` (padrão `ml mlflow prefect`): `pg_dump -Fc` usando `PGHOST`, `PGUSER`, `PGPASSWORD` do ambiente.
-   - `tar czf artifacts.tgz -C /artefatos .`.
+   - `tar czf artifacts.tgz -C /artifacts .`.
    - `rclone copy <dir> "$RCLONE_DESTINATION/<AAAA-MM-DD>/"`; depois `rclone delete --min-age "${BACKUP_RETENTION_DAYS}d" "$RCLONE_DESTINATION"` e `rclone rmdirs --leave-root "$RCLONE_DESTINATION"`.
    - Imprime `backup ok <data> <tamanhos>`.
-3. `restore.sh <AAAA-MM-DD>`: valida a data; `rclone copy "$RCLONE_DESTINATION/<data>/" <tmp>`; para cada banco, `pg_restore --clean --if-exists --no-owner -d <banco>`; extrai os artefatos em `/artefatos` (que no restore é montado com escrita). Imprime `restore ok <data>`.
-4. Compose: serviço `backup` com `build: ./backup`, `profiles: ["jobs"]`, `restart: "no"`, `mem_limit: 256m`, `environment` com o usuário admin e `RCLONE_*`, volume `mlflow_artifacts:/artefatos:ro`.
+3. `restore.sh <AAAA-MM-DD>`: valida a data; `rclone copy "$RCLONE_DESTINATION/<data>/" <tmp>`; para cada banco, `pg_restore --clean --if-exists --no-owner -d <banco>`; extrai os artefatos em `/artifacts` (que no restore é montado com escrita). Imprime `restore ok <data>`.
+4. Compose: serviço `backup` com `build: ./backup`, `profiles: ["jobs"]`, `restart: "no"`, `mem_limit: 256m`, `environment` com o usuário admin e `RCLONE_*`, volume `mlflow_artifacts:/artifacts:ro`.
 5. Units systemd: `platform-backup.service` (`Type=oneshot`, `ExecStart=/usr/bin/docker compose -f /opt/platform/infra/docker-compose.yml run --rm backup`, `OnFailure=platform-backup-failed.service`); `.timer` às 03:00 (`OnCalendar=*-*-* 03:00:00`, `Persistent=true`); `platform-backup-failed.service` chama `curl` para a API do Telegram com `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` lidos de `EnvironmentFile=/opt/platform/infra/.env`.
 6. Rode os critérios de pronto.
 
