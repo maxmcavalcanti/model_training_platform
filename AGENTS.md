@@ -6,7 +6,7 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
 
 - Este repo cuida de "o job rodou?". O repo `modelos` cuida de "o modelo está certo?".
 - O único ponto de passagem é o alias `champion` no MLflow. Trocar o alias é o deploy de um modelo.
-- Schema de `raw` e `ref` só muda com migração Alembic. A assinatura de `build_features`, `predict` e `evaluate` só muda por decisão registrada em ADR.
+- Mudança em `raw` ou `ref` exige migração Alembic + ADR + aviso à ciência de dados. Mudança na assinatura de `build_features`, `predict` e `evaluate` exige ADR.
 
 ## Onde ler mais (carregue só o que a tarefa pedir)
 
@@ -20,7 +20,7 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
 - Toda linha em `raw` leva `ingerido_em`.
 - Todo job termina com checagem de qualidade (pandera). Checagem falha = execução falha.
 - Nenhum segredo no git. Segredos entram por variável de ambiente.
-- O deny de `Read` não impede leitura via Bash (`cat .env`); portanto agentes nunca devem ler arquivos `.env`, com nenhuma ferramenta.
+- O deny de `Read` não impede leitura via Bash (`cat .env`); portanto agentes nunca devem ler arquivos `.env`, com nenhuma ferramenta. O deny também bloqueia `.env.example`; se um agente precisar das variáveis documentadas, o usuário cola o conteúdo.
 - TDD estrito: todo código de produção nasce de um teste vermelho. Ciclo: vermelho (test-writer) → implementação mínima → verde → refatorar com a suíte verde. Sem teste vermelho antes, sem código.
 - Merge na `main` é a única forma de mudar produção.
 
@@ -30,13 +30,13 @@ Ainda não há código. Quando o ambiente de desenvolvimento existir, liste aqui
 
 ## Fluxo de trabalho
 
-- Mudança estrutural gera ADR em `docs/adr/` antes do código.
+- Mudança estrutural gera ADR em `docs/adr/` antes do código. Nenhum agente escreve ADR: o `task-planner` só sinaliza a necessidade no plano. O ADR é uma tarefa separada (PR próprio, escrito pelo usuário ou pela skill `generate-adr`) e precisa estar mergeado antes de a implementação começar.
 - Fluxo de uma tarefa:
   1. `task-planner` grava o plano com casos de teste em `docs/plans/` e o usuário aprova.
   2. `test-writer` escreve os testes e confirma que falham (pular se o plano disser "Testes necessários: não").
   3. `task-implementer` implementa em worktree partindo da branch com os testes, sem editar testes.
-  4. O CI roda tudo.
-  5. `code-reviewer` revisa antes do PR.
-  6. `pr-reviewer` revisa o PR contra o plano.
+  4. `code-reviewer` revisa antes do PR.
+  5. Abrir o PR (o CI roda no PR).
+  6. CI + `pr-reviewer`, que revisa o PR contra o plano.
 - Uma fase do roadmap por vez. Não adiante itens de fases futuras.
 - Dê evidência de que funciona: o comando rodado e a saída, não só "deve funcionar".
