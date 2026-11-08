@@ -16,9 +16,11 @@ from ingestion.checks import (
     WEATHER_FORECAST_SCHEMA,
     CheckFailed,
     check,
+    check_ons_daily_load,
 )
 from ingestion.db import upsert
 from ingestion.http import NetworkError
+from ingestion.ons import fetch_load
 from ingestion.openmeteo import (
     FORECAST_TIMEZONE,
     MAX_HORIZON_DAYS,
@@ -146,5 +148,61 @@ def load_calendar(engine: sqlalchemy.Engine, start: date, end: date) -> int:
         start,
         end,
         int(stored["is_national_holiday"].sum()),
+    )
+    return written
+
+
+# Provisional until roadmap item 18 measures the ONS publication delay and revision depth.
+ONS_WINDOW_DAYS = 30
+ONS_MAX_DELAY_DAYS = 5
+
+_ONS_TABLE = "raw.ons_daily_load"
+_ONS_KEYS = ["subsystem", "date"]
+_ONS_REREAD_STATEMENT = sqlalchemy.text(
+    'SELECT subsystem, "date", load_avg_mw FROM raw.ons_daily_load '
+    'WHERE "date" BETWEEN :start AND :end ORDER BY "date", subsystem'
+)
+
+
+def ingest_ons_load(
+    engine: sqlalchemy.Engine,
+    client: httpx.Client,
+    start: date,
+    end: date,
+    *,
+    max_delay_days: int = ONS_MAX_DELAY_DAYS,
+    base_delay: float = 1.0,
+) -> int:
+    """Upsert ONS daily load for ``start`` to ``end`` (inclusive) and check what was stored."""
+    if start > end:
+        raise ValueError(f"start {start} is after end {end}")
+
+    frames: list[pd.DataFrame] = []
+    for year in range(start.year, end.year + 1):
+        try:
+            frames.append(fetch_load(client, year, base_delay=base_delay))
+        except httpx.HTTPStatusError as error:
+            if year == end.year and error.response.status_code == 404:
+                logger.warning("ONS load file for %d not published yet (404)", year)
+                continue
+            raise
+
+    written = 0
+    if frames:
+        loaded = pd.concat(frames, ignore_index=True)
+        window = loaded[(loaded["date"] >= start) & (loaded["date"] <= end)]
+        if not window.empty:
+            with engine.begin() as conn:
+                written = upsert(conn, _ONS_TABLE, window, keys=_ONS_KEYS, on_conflict="update")
+
+    with engine.connect() as conn:
+        stored = pd.read_sql_query(_ONS_REREAD_STATEMENT, conn, params={"start": start, "end": end})
+    check_ons_daily_load(stored, start, end, max_delay_days)
+    logger.info(
+        "ons-load ok: %d rows written from %s to %s, last date %s",
+        written,
+        start,
+        end,
+        stored["date"].max(),
     )
     return written

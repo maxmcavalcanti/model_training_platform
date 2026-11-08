@@ -9,7 +9,7 @@ import sys
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 import httpx
 
@@ -71,6 +71,49 @@ SUBCOMMANDS["calendar"] = Subcommand(
     help="Load ref.calendar (one row per day, national holidays) for a date range",
     add_arguments=_add_calendar_arguments,
     run=_run_calendar,
+)
+
+
+def _positive_int(value: str) -> int:
+    number = int(value)
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return number
+
+
+def _add_ons_load_arguments(parser: argparse.ArgumentParser) -> None:
+    from ingestion.jobs import ONS_WINDOW_DAYS
+
+    parser.add_argument("--end", type=date.fromisoformat, help="last day (ISO), default today")
+    window = parser.add_mutually_exclusive_group()
+    window.add_argument("--start", type=date.fromisoformat, help="first day (ISO)")
+    window.add_argument(
+        "--days",
+        type=_positive_int,
+        default=ONS_WINDOW_DAYS,
+        help=f"window length in days ending at --end (default {ONS_WINDOW_DAYS})",
+    )
+
+
+def _run_ons_load(args: argparse.Namespace) -> int:
+    from ingestion import jobs
+    from ingestion.db import build_engine
+
+    end = args.end or jobs.issue_date()
+    start = args.start or end - timedelta(days=args.days - 1)
+    engine = build_engine()
+    try:
+        with httpx.Client(timeout=60) as client:
+            jobs.ingest_ons_load(engine, client, start, end)
+    finally:
+        engine.dispose()
+    return 0
+
+
+SUBCOMMANDS["ons-load"] = Subcommand(
+    help="Upsert ONS daily load into raw.ons_daily_load (rolling window or --start/--end backfill)",
+    add_arguments=_add_ons_load_arguments,
+    run=_run_ons_load,
 )
 
 
