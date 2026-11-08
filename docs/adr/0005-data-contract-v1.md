@@ -37,7 +37,7 @@ Em `raw.weather_forecast`, `issued_at` é do tipo `date`: o dia em que o snapsho
 - A faixa de horizontes 1 a 7 não guarda o horizonte 0 (previsão para o próprio dia de emissão). O plano do PR 13 propõe hoje `check (horizon_days between 0 and 16)`; o PR 13 deve alinhar a restrição a esta decisão ou registrar por que ela é mais larga. O ponto fica em aberto aqui.
 - Em aberto: guardar o horizonte 0, que o usuário recomendou avaliar com a cientista (P8). Se for incluído, muda `expected_rows` e a faixa de `horizon_days` (PRs 13, 14 e 15) e exige novo ADR ou emenda a este.
 - Em aberto: o fuso que define "o dia" de `issued_at`. O plano do PR 13 propõe `America/Sao_Paulo`; confirmar no PR 13.
-- Em aberto: o formato exato do slug (conjunto de caracteres permitido e restrição no banco). O plano do PR 09 propõe `^[a-z_]+$` via `CHECK`; confirmar no PR 09.
+- Resolvido no PR 09 (confirmado pelo usuário em 2026-11-07): o slug segue a regex `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`, aplicada via `CHECK`; a proposta anterior `^[a-z_]+$` foi descartada. `ref.locations` não tem coluna `timezone`: o dia dos dados de clima é `America/Sao_Paulo`, definido pelos jobs.
 - Com "última escrita", quem precisar saber quando uma linha entrou pela primeira vez não tem como saber em tabelas que atualizam. Se isso virar necessidade, a coluna nova muda o contrato de `raw` e precisa de ADR.
 - O PR 08 (upsert) não depende deste ADR enquanto P9 ficar com "última escrita", como decidido. Os PRs 09 e 13 dependem dele.
 - Aviso à ciência de dados: a cientista consulta `raw` e `ref` e deve ser avisada deste contrato e do horizonte 0 em aberto.
