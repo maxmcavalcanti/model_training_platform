@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from alembic import command
-from sqlalchemy import text
+from sqlalchemy import event, text
 
 from ingestion.db import build_engine, upsert
 from tests.conftest import alembic_config
@@ -22,6 +22,9 @@ pytestmark = pytest.mark.db
 
 TABLE = "raw.upsert_test"
 UNSTAMPED_TABLE = "raw.upsert_test_unstamped"
+WIDE_TABLE = "raw.upsert_test_wide"
+WIDE_VALUE_COLUMNS = [f"v{index}" for index in range(20)]
+MAX_STATEMENT_PARAMETERS = 65_535
 KEYS = ["k1", "k2"]
 DAY_1 = dt.date(2024, 1, 1)
 DAY_2 = dt.date(2024, 1, 2)
@@ -47,6 +50,13 @@ def upsert_database(fresh_database, monkeypatch) -> Iterator[str]:
                 text(
                     "CREATE TABLE raw.upsert_test_unstamped ("
                     "k1 text PRIMARY KEY, value double precision)"
+                )
+            )
+            wide_columns = ", ".join(f"{name} double precision" for name in WIDE_VALUE_COLUMNS)
+            connection.execute(
+                text(
+                    f"CREATE TABLE raw.upsert_test_wide (k1 text PRIMARY KEY, {wide_columns}, "
+                    "ingested_at timestamptz NOT NULL)"
                 )
             )
     finally:
@@ -302,3 +312,25 @@ def test_only_key_columns_behaves_like_ignore(engine):
 
     assert returned == 0
     assert _select(engine, f"SELECT k1, value FROM {UNSTAMPED_TABLE}") == [("a", 1.0)]
+
+
+def test_wide_dataframe_stays_under_parameter_limit(engine):
+    # 21 columns: 5000 rows per statement would need 105 000 parameters, above the 65 535 limit.
+    row_count = 6_000
+    rows = pd.DataFrame({"k1": [f"key{index}" for index in range(row_count)]})
+    for offset, name in enumerate(WIDE_VALUE_COLUMNS):
+        rows[name] = float(offset)
+    parameter_counts: list[int] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("INSERT"):
+            parameter_counts.append(len(parameters))
+
+    event.listen(engine, "before_cursor_execute", record)
+    with engine.begin() as conn:
+        returned = upsert(conn, WIDE_TABLE, rows, ["k1"])
+
+    assert returned == row_count
+    assert _count(engine, WIDE_TABLE) == row_count
+    assert len(parameter_counts) >= 2
+    assert max(parameter_counts) <= MAX_STATEMENT_PARAMETERS
