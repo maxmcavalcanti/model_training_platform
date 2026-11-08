@@ -37,9 +37,9 @@ Regra (`.claude/rules/infra.md`): "Deploy só sai de merge na `main`. Nada de SS
    - `permissions: contents: read, packages: write`.
    - `concurrency: {group: deploy, cancel-in-progress: false}` (dois merges seguidos não rodam deploys em paralelo).
    - Job `images`: `actions/checkout`, `docker/login-action` (registry `ghcr.io`, usuário `${{ github.actor }}`, senha `${{ secrets.GITHUB_TOKEN }}`), `docker/build-push-action` para `infra/jobs/Dockerfile` (contexto `.`) e `infra/mlflow/Dockerfile` (contexto `infra/mlflow`), tags `ghcr.io/${{ github.repository_owner }}/platform-jobs:${{ github.sha }}` e `:main` (idem `platform-mlflow`). Nome do dono em minúsculas (o GHCR exige).
-   - Fixe cada action por major atual, conferida no Marketplace.
+   - Fixe cada action por SHA completo de commit com comentário `# vX.Y.Z` (ADR 0006, item 4), resolvido e validado como no plano S1, passo 4; `actions/checkout` com `persist-credentials: false`.
 3. Compose: `image:` nos três serviços, como na tabela.
-4. `ci.yml`: passo `docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:<versão> -color` (fixe a versão).
+4. `ci.yml`: passo `docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:<versão>@sha256:<digest> -color` (fixe a versão e o digest, ADR 0006, item 5, resolvido como no plano S1, passo 6).
 5. Rode os critérios de pronto.
 
 ## 6. Critérios de pronto
@@ -47,7 +47,7 @@ Regra (`.claude/rules/infra.md`): "Deploy só sai de merge na `main`. Nada de SS
 | Comando | Saída esperada |
 | --- | --- |
 | `uv run pytest tests/infra/` | Todos passam |
-| `docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:<versão>` | Sem saída, código 0 |
+| `docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:<versão>@sha256:<digest>` | Sem saída, código 0 |
 | `docker compose -f infra/docker-compose.yml --env-file infra/.env.example config -q` | Código 0 |
 | `gh pr checks` | Verde |
 | Depois do merge: `gh run list --workflow deploy.yml --limit 1` | `completed success` |
@@ -69,6 +69,7 @@ Regra (`.claude/rules/infra.md`): "Deploy só sai de merge na `main`. Nada de SS
 - P2 resolvida (2026-11-07): repositórios públicos; a VPS puxa as imagens do GHCR sem `docker login` e sem token. Atenção: o pacote do GHCR pode nascer privado mesmo com o repo público; o item 38 confere a visibilidade e a torna pública. O `GITHUB_TOKEN` do workflow só escreve no GHCR e nunca sai do Actions.
 - Imagem pública: nada de segredo em camada da imagem (sem `.env`, sem `ARG` com senha). O `.dockerignore` deve excluir `.env` e `infra/.env`; confira.
 - A partir daqui, `build` na VPS não deve mais ser usado; o item 38 troca o fluxo manual por `pull`.
+- O teste de digest do S1 (`tests/infra/test_supply_chain_pins.py`) exige `@sha256:` em todo `image:`; as imagens próprias `ghcr.io/${GHCR_OWNER}/platform-*:${IMAGE_TAG}` entram numa lista explícita de exceção, escrita pelo test-writer deste PR.
 
 ## 10. Decisões que exigem ADR
 

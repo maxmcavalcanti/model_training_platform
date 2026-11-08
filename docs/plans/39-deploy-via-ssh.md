@@ -40,7 +40,7 @@ Do doc: "SSH na VPS: `alembic upgrade head`, `docker compose pull && up -d`, reg
    - Sem `docker login`: as imagens do GHCR são públicas (P2 resolvida).
    - Grava `IMAGE_TAG=$SHA` no `infra/.env` (substituindo a linha), para um reboot subir a mesma versão.
    - No fim, imprime `deploy ok <sha>`.
-3. `deploy.yml`, job `deploy`: `needs: images`, `environment: production`, passos `tailscale/github-action` (major atual, com `oauth-client-id`, `oauth-secret`, `tags: tag:ci`), gravar `VPS_SSH_KEY` em arquivo `600` e `VPS_KNOWN_HOSTS` em `~/.ssh/known_hosts`, `ssh -i <arquivo> deploy@${{ secrets.VPS_HOST }} "${{ github.sha }}"`, e checagem final `curl -fsS https://${{ vars.TS_HOSTNAME }}:8080/health` (o runner está na tailnet pelo `tailscale/github-action`; a ACL do item 38 libera `tag:ci` só para as portas 22 e 8080; `TS_HOSTNAME` é variável do environment, não segredo).
+3. `deploy.yml`, job `deploy`: `needs: images`, `environment: production`, passos `tailscale/github-action` (por SHA completo com comentário `# vX.Y.Z`, ADR 0006, item 4, resolvido como no plano S1, passo 4, com `oauth-client-id`, `oauth-secret`, `tags: tag:ci`), gravar `VPS_SSH_KEY` em arquivo `600` e `VPS_KNOWN_HOSTS` em `~/.ssh/known_hosts`, `ssh -i <arquivo> deploy@${{ secrets.VPS_HOST }} "${{ github.sha }}"`, e checagem final `curl -fsS https://${{ vars.TS_HOSTNAME }}:8080/health` (o runner está na tailnet pelo `tailscale/github-action`; a ACL do item 38 libera `tag:ci` só para as portas 22 e 8080; `TS_HOSTNAME` é variável do environment, não segredo).
 4. `ci.yml`: o passo `shellcheck infra/scripts/*.sh` já existe desde o PR 03; confirme que pega o `deploy.sh`.
 5. Rode os critérios de pronto.
 
