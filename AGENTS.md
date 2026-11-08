@@ -20,6 +20,7 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
 - Toda linha em `raw` leva `ingested_at`.
 - Todo job termina com checagem de qualidade (pandera). Checagem falha = execução falha.
 - Nenhum segredo no git. Segredos entram por variável de ambiente.
+- Lint de segurança pela regra `S` do ruff (ADR 0006). Achado se corrige no código; ignore só em `[tool.ruff.lint.per-file-ignores]` do `pyproject.toml`, restrito a caminho e regra, com comentário de motivo. Nunca `noqa`.
 - O deny de `Read` não impede leitura via Bash (`cat .env`); portanto agentes nunca devem ler arquivos `.env`, com nenhuma ferramenta. O deny também bloqueia `.env.example`; se um agente precisar das variáveis documentadas, o usuário cola o conteúdo.
 - TDD estrito: todo código de produção nasce de um teste vermelho. Ciclo: vermelho (test-writer) → implementação mínima → verde → refatorar com a suíte verde. Sem teste vermelho antes, sem código. Exceção: refatoração com a suíte já verde não exige teste vermelho novo.
 - Merge na `main` é a única forma de mudar produção.
