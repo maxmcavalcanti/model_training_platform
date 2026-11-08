@@ -1,0 +1,115 @@
+name: security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+env:
+  # Trivy runs from an image pinned by digest, not from aquasecurity/trivy-action (ADR 0006)
+  TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+
+jobs:
+  zizmor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - run: uv sync --locked --only-dev
+      - name: Run zizmor (SARIF)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          uv run --no-sync zizmor --format sarif . > "$RUNNER_TEMP/zizmor.sarif"
+          code=$?
+          set -e
+          # 0 = clean, >= 10 = findings; anything else is a tool error
+          if [ "$code" -ne 0 ] && [ "$code" -lt 10 ]; then exit "$code"; fi
+      - name: Upload zizmor SARIF
+        if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: ${{ runner.temp }}/zizmor.sarif
+          category: zizmor
+      - name: Fail on zizmor findings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run --no-sync zizmor .
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime, development
+
+  trivy-config:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run Trivy config on Dockerfiles (SARIF)
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-out"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$GITHUB_WORKSPACE:/src:ro" -v "$RUNNER_TEMP/trivy-out:/out" -w /src \
+            "$TRIVY_IMAGE" config --misconfig-scanners dockerfile --skip-check-update \
+            --severity HIGH,CRITICAL --exit-code 0 --format sarif --output /out/trivy-config.sarif .
+      - name: Upload Trivy config SARIF
+        if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: ${{ runner.temp }}/trivy-out/trivy-config.sarif
+          category: trivy-config
+      - name: Fail on Trivy config findings
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$GITHUB_WORKSPACE:/src:ro" -w /src \
+            "$TRIVY_IMAGE" config --misconfig-scanners dockerfile --skip-check-update \
+            --severity HIGH,CRITICAL --exit-code 1 .
+
+  trivy-fs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run Trivy fs for vulnerabilities and secrets (SARIF)
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-out" "$RUNNER_TEMP/trivy-cache"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$GITHUB_WORKSPACE:/src:ro" -v "$RUNNER_TEMP/trivy-out:/out" \
+            -v "$RUNNER_TEMP/trivy-cache:/cache" -w /src \
+            "$TRIVY_IMAGE" fs --cache-dir /cache --scanners vuln,secret --include-dev-deps \
+            --severity HIGH,CRITICAL --ignore-unfixed \
+            --exit-code 0 --format sarif --output /out/trivy-fs.sarif .
+      - name: Upload Trivy fs SARIF
+        if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: ${{ runner.temp }}/trivy-out/trivy-fs.sarif
+          category: trivy-fs
+      - name: Fail on Trivy fs findings
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$GITHUB_WORKSPACE:/src:ro" -v "$RUNNER_TEMP/trivy-cache:/cache" -w /src \
+            "$TRIVY_IMAGE" fs --cache-dir /cache --skip-db-update --scanners vuln,secret --include-dev-deps \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 .
