@@ -4,6 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.20.1",
+    "django==3.2",
     "holidays>=0.108",
     "httpx>=0.28.1",
     "pandas>=3.1.1",
