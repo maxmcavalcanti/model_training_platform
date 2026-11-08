@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date, timedelta
 
 import pandas as pd
@@ -45,22 +46,83 @@ def _min_not_above_max(df: pd.DataFrame) -> pd.Series:
     return df["temp_min"].isna() | df["temp_max"].isna() | (df["temp_min"] <= df["temp_max"])
 
 
+def _weather_variable_columns() -> dict[str, pa.Column]:
+    return {
+        "temp_max": _temperature(),
+        "temp_min": _temperature(),
+        "precip_mm": pa.Column(float, pa.Check.ge(0), nullable=True),
+        "wind_speed_max": pa.Column(float, pa.Check.ge(0), nullable=True),
+        "humidity_mean": pa.Column(float, pa.Check.in_range(0, 100), nullable=True),
+    }
+
+
+def _min_not_above_max_check() -> pa.Check:
+    return pa.Check(_min_not_above_max, error="temp_min must not exceed temp_max")
+
+
 WEATHER_FORECAST_SCHEMA = pa.DataFrameSchema(
     {
         "location_id": pa.Column(nullable=False),
         "issued_at": pa.Column(nullable=False),
         "target_date": pa.Column(nullable=False),
         "horizon_days": pa.Column(int, pa.Check.in_range(1, 7), nullable=False),
-        "temp_max": _temperature(),
-        "temp_min": _temperature(),
-        "precip_mm": pa.Column(float, pa.Check.ge(0), nullable=True),
-        "wind_speed_max": pa.Column(float, pa.Check.ge(0), nullable=True),
-        "humidity_mean": pa.Column(float, pa.Check.in_range(0, 100), nullable=True),
+        **_weather_variable_columns(),
     },
-    checks=pa.Check(_min_not_above_max, error="temp_min must not exceed temp_max"),
+    checks=_min_not_above_max_check(),
     unique=["location_id", "issued_at", "target_date"],
     strict=False,
 )
+
+WEATHER_OBSERVED_SCHEMA = pa.DataFrameSchema(
+    {
+        "location_id": pa.Column(nullable=False),
+        "date": pa.Column(nullable=False),
+        **_weather_variable_columns(),
+    },
+    checks=_min_not_above_max_check(),
+    unique=["location_id", "date"],
+    strict=False,
+)
+
+
+def check_weather_observed(
+    df: pd.DataFrame,
+    location_ids: Sequence[str],
+    start: date,
+    end: date,
+    max_delay_days: int,
+) -> None:
+    """Check stored observed weather: schema, then continuity and freshness per location.
+
+    Continuity runs from ``start`` to the last date present for the location; freshness
+    compares that last date with ``end - max_delay_days``.
+
+    All problems are reported together in a single :class:`CheckFailed`.
+    """
+    problems: list[str] = []
+    try:
+        WEATHER_OBSERVED_SCHEMA.validate(df, lazy=True)
+    except pandera.errors.SchemaErrors as error:
+        problems.append(_describe(error))
+
+    limit = end - timedelta(days=max_delay_days)
+    for location_id in location_ids:
+        present = set(df.loc[df["location_id"] == location_id, "date"])
+        if not present:
+            problems.append(f"{location_id}: no rows between {start} and {end}")
+            continue
+        last = max(present)
+        missing = [
+            day.isoformat()
+            for day in (start + timedelta(days=n) for n in range((last - start).days + 1))
+            if day not in present
+        ]
+        if missing:
+            problems.append(f"{location_id}: missing dates: {', '.join(missing)}")
+        if last < limit:
+            problems.append(f"{location_id}: stale: last date {last} is older than {limit}")
+    if problems:
+        raise CheckFailed("; ".join(problems))
 
 
 def _weekday_matches_date(df: pd.DataFrame) -> pd.Series:

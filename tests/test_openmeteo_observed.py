@@ -358,3 +358,52 @@ def test_client_error_400_is_not_retried_and_is_not_a_network_error():
     assert not isinstance(error_info.value, NetworkError)
     assert len(harness.requests) == 1
     assert harness.sleeps == []
+
+
+# ---------------------------------------------------------------------------
+# Plan 26, cases 13 to 16: malformed values become ValueError naming the location
+# ---------------------------------------------------------------------------
+
+
+# Plan 26, case 13
+def test_invalid_calendar_date_in_time_is_a_value_error_naming_the_location():
+    payload = _payload()
+    payload["daily"]["time"][3] = "2026-13-01"
+
+    error_info = _expect_value_error(payload)
+
+    assert "sao_paulo" in str(error_info.value)
+
+
+# Plan 26, case 14
+def test_null_in_time_is_a_value_error_not_a_type_error():
+    payload = _payload()
+    payload["daily"]["time"][3] = None
+
+    error_info = _expect_value_error(payload)
+
+    assert "sao_paulo" in str(error_info.value)
+
+
+# Plan 26, case 15
+def test_non_numeric_text_in_a_variable_is_a_value_error_naming_location_and_variable():
+    payload = _payload()
+    payload["daily"]["temperature_2m_max"][2] = "abc"
+
+    error_info = _expect_value_error(payload)
+
+    message = str(error_info.value)
+    assert "sao_paulo" in message
+    assert "temperature_2m_max" in message
+
+
+# Plan 26, case 16
+def test_object_in_a_variable_is_a_value_error_not_a_type_error():
+    payload = _payload()
+    payload["daily"]["precipitation_sum"][2] = {}
+
+    error_info = _expect_value_error(payload)
+
+    message = str(error_info.value)
+    assert "sao_paulo" in message
+    assert "precipitation_sum" in message

@@ -24,6 +24,8 @@ REDIRECT_MARKERS = (">", "|")
 MIDNIGHT_HOURS = frozenset({23, 0})
 FORECAST_LINE = "30 6 * * * python -m ingestion weather-forecast"
 ONS_LOAD_LINE = "0 7 * * * python -m ingestion ons-load"
+WEATHER_OBSERVED_LINE = "45 6 * * * python -m ingestion weather-observed"
+MIN_SPACING_MINUTES = 15
 
 
 # --------------------------------------------------------------------------- check functions
@@ -98,6 +100,40 @@ def ons_load_line_problems(lines: list[str]) -> list[str]:
     if " ".join(matching[0].split()) != ONS_LOAD_LINE:
         return [f"{matching[0]!r} is not {ONS_LOAD_LINE!r}"]
     return []
+
+
+def weather_observed_line_problems(lines: list[str]) -> list[str]:
+    """Plan 26, case 44: exactly one ``weather-observed`` line, ``45 6 * * *``, no arguments."""
+    matching = [
+        line
+        for line in lines
+        if (m := COMMAND_FORM.match(split_line(line)[1]))
+        and m.group("subcommand") == "weather-observed"
+    ]
+    if len(matching) != 1:
+        return [f"expected exactly one weather-observed line, got {len(matching)}"]
+    if " ".join(matching[0].split()) != WEATHER_OBSERVED_LINE:
+        return [f"{matching[0]!r} is not {WEATHER_OBSERVED_LINE!r}"]
+    return []
+
+
+def spacing_problems(lines: list[str], min_minutes: int = MIN_SPACING_MINUTES) -> list[str]:
+    """Plan 26, case 47: any two lines are at least ``min_minutes`` apart in the day."""
+    minutes: list[tuple[str, int]] = []
+    problems = []
+    for line in lines:
+        fields, _ = split_line(line)
+        if len(fields) < 2 or not all(FIXED_NUMBER.match(value) for value in fields[:2]):
+            problems.append(f"{line!r}: minute and hour are not fixed numbers")
+            continue
+        minutes.append((line, int(fields[1]) * 60 + int(fields[0])))
+    for index, (first_line, first) in enumerate(minutes):
+        for second_line, second in minutes[index + 1 :]:
+            if abs(first - second) < min_minutes:
+                problems.append(
+                    f"{first_line!r} and {second_line!r} are less than {min_minutes} minutes apart"
+                )
+    return problems
 
 
 def fixed_time_problems(line: str) -> list[str]:
@@ -356,3 +392,80 @@ def test_ons_load_check_accepts_the_expected_line():
 )
 def test_ons_load_check_rejects_missing_duplicate_or_deviating_lines(lines_):
     assert ons_load_line_problems(lines_) != []
+
+
+# --------------------------------------------------------------------------- plan 26
+
+
+def _line(minute: int, hour: int, subcommand: str) -> str:
+    return f"{minute} {hour} * * * python -m ingestion {subcommand}"
+
+
+# Plan 26, case 44
+def test_weather_observed_runs_once_at_0645_without_arguments_and_others_are_unchanged(lines):
+    assert weather_observed_line_problems(lines) == []
+    assert forecast_line_problems(lines) == []
+    assert ons_load_line_problems(lines) == []
+
+
+# Plan 26, case 45
+def test_weather_observed_check_accepts_the_expected_line_alone_and_with_the_others():
+    assert weather_observed_line_problems([WEATHER_OBSERVED_LINE]) == []
+    assert (
+        weather_observed_line_problems([FORECAST_LINE, WEATHER_OBSERVED_LINE, ONS_LOAD_LINE]) == []
+    )
+
+
+# Plan 26, case 45
+@pytest.mark.parametrize(
+    "lines_",
+    [
+        [],
+        [FORECAST_LINE],
+        [WEATHER_OBSERVED_LINE, WEATHER_OBSERVED_LINE],
+        ["30 6 * * * python -m ingestion weather-observed"],
+        ["0 7 * * * python -m ingestion weather-observed"],
+        ["45 7 * * * python -m ingestion weather-observed"],
+        ["45 6 * * 1-5 python -m ingestion weather-observed"],
+        [WEATHER_OBSERVED_LINE + " --days 10"],
+    ],
+)
+def test_weather_observed_check_rejects_missing_duplicate_or_deviating_lines(lines_):
+    assert weather_observed_line_problems(lines_) != []
+
+
+# Plan 26, case 46: the general rules hold for the new line
+def test_existing_rules_hold_for_the_weather_observed_line(lines):
+    observed_lines = [line for line in lines if "weather-observed" in line]
+    assert len(observed_lines) == 1
+    line = observed_lines[0]
+    assert field_problems(line) == []
+    assert command_problems(line, set(SUBCOMMANDS)) == []
+    assert fixed_time_problems(line) == []
+    assert midnight_problems(line) == []
+    assert redirect_problems(line) == []
+
+
+# Plan 26, case 47
+def test_every_pair_of_crontab_lines_is_at_least_fifteen_minutes_apart(lines):
+    assert len(lines) >= 3
+    assert spacing_problems(lines, min_minutes=15) == []
+
+
+# Plan 26, case 48
+def test_spacing_check_accepts_the_three_real_lines_and_a_fifteen_minute_gap():
+    assert spacing_problems([FORECAST_LINE, WEATHER_OBSERVED_LINE, ONS_LOAD_LINE]) == []
+    assert spacing_problems([_line(30, 6, "a"), _line(45, 6, "b")], min_minutes=15) == []
+
+
+# Plan 26, case 48
+@pytest.mark.parametrize(
+    "lines_",
+    [
+        [_line(30, 6, "a"), _line(40, 6, "b")],
+        [_line(30, 6, "a"), _line(30, 6, "b")],
+        [FORECAST_LINE, _line(0, 7, "a"), ONS_LOAD_LINE],
+    ],
+)
+def test_spacing_check_rejects_lines_closer_than_fifteen_minutes(lines_):
+    assert spacing_problems(lines_, min_minutes=15) != []

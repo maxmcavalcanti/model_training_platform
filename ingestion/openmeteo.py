@@ -135,7 +135,10 @@ def fetch_observed(
     daily = _daily_section(payload, location.location_id)
 
     expected = [start + timedelta(days=n) for n in range((end - start).days + 1)]
-    received = [date.fromisoformat(day) for day in daily["time"]]
+    try:
+        received = [date.fromisoformat(day) for day in daily["time"]]
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"{location.location_id}: malformed daily 'time': {error}") from error
     for want, got in zip(expected, received, strict=False):
         if want != got:
             raise ValueError(f"{location.location_id}: expected day {want}, got {got}")
@@ -150,6 +153,11 @@ def fetch_observed(
         "date": expected,
     }
     for name, column in DAILY_VARIABLES.items():
-        columns[column] = pd.Series(daily[name], dtype="float64")
+        try:
+            columns[column] = pd.Series(daily[name], dtype="float64")
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"{location.location_id}: non-numeric value in daily '{name}': {error}"
+            ) from error
     frame = pd.DataFrame(columns)
     return frame.dropna(how="all", subset=list(DAILY_VARIABLES.values())).reset_index(drop=True)
