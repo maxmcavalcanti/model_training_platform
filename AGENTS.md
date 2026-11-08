@@ -36,6 +36,7 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
 - Adicionar dependência: `uv add <pacote>` (dev: `uv add --dev <pacote>`). Sempre commitar `uv.lock`.
 - CLI local: `uv run python -m ingestion --help`
 - Snapshot da previsão: `uv run python -m ingestion weather-forecast` (usa `DATABASE_URL`; na VPS: `docker compose -f infra/docker-compose.yml run --rm jobs python -m ingestion weather-forecast`)
+- Calendário: `uv run python -m ingestion calendar --start 2015-01-01 --end 2030-12-31` (usa `DATABASE_URL`; na VPS: `docker compose -f infra/docker-compose.yml run --rm jobs python -m ingestion calendar --start 2015-01-01 --end 2030-12-31`)
 - Imagem dos jobs: `docker build -f infra/jobs/Dockerfile -t platform-jobs .`
 - Agendador interino (supercronic, até o PR 36): validar o crontab com `docker run --rm platform-jobs supercronic -test /app/infra/cron/crontab`; na VPS: `docker compose -f infra/docker-compose.yml build scheduler`, `docker compose -f infra/docker-compose.yml up -d scheduler` e `docker compose -f infra/docker-compose.yml logs scheduler`
 - Na VPS (até o PR 37 a imagem é construída lá, ADR 0004): `docker compose -f infra/docker-compose.yml build jobs` e `docker compose -f infra/docker-compose.yml run --rm jobs <comando>` (ex.: `alembic upgrade head`)
