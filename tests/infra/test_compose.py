@@ -462,9 +462,19 @@ def healthcheck_problems(service: dict) -> list[str]:
 
 def image_tag(service: dict) -> str | None:
     image = service.get("image")
-    if not isinstance(image, str) or ":" not in image:
+    if not isinstance(image, str):
         return None
-    return image.rsplit(":", 1)[1]
+    reference = image.split("@", 1)[0]
+    if ":" not in reference.rsplit("/", 1)[-1]:
+        return None
+    return reference.rsplit(":", 1)[1]
+
+
+def image_digest(service: dict) -> str | None:
+    image = service.get("image")
+    if not isinstance(image, str) or "@" not in image:
+        return None
+    return image.split("@", 1)[1]
 
 
 def image_tag_problems(prod: dict, dev: dict) -> list[str]:
@@ -473,6 +483,10 @@ def image_tag_problems(prod: dict, dev: dict) -> list[str]:
     prod_tag, dev_tag = image_tag(prod), image_tag(dev)
     if prod_tag != dev_tag:
         problems.append(f"prod tag {prod_tag!r} differs from dev tag {dev_tag!r}")
+    if image_digest(prod) != image_digest(dev):
+        problems.append(
+            f"prod digest {image_digest(prod)!r} differs from dev digest {image_digest(dev)!r}"
+        )
     if prod_tag is None or not FIXED_MINOR_TAG.match(prod_tag):
         problems.append(f"tag {prod_tag!r} is not a fixed major.minor tag")
     return problems
@@ -630,6 +644,22 @@ def test_healthcheck_check_accepts_a_test():
 def test_image_tag_check_accepts_same_fixed_minor_tag():
     service = {"image": "postgres:16.15"}
     assert image_tag_problems(service, {"image": "postgres:16.15"}) == []
+
+
+def test_image_tag_check_splits_the_digest_from_the_tag():
+    service = {"image": "postgres:16.15@sha256:" + "a" * 64}
+    assert image_tag(service) == "16.15"
+
+
+def test_image_tag_check_accepts_same_tag_and_same_digest():
+    image = "postgres:16.15@sha256:" + "a" * 64
+    assert image_tag_problems({"image": image}, {"image": image}) == []
+
+
+def test_image_tag_check_rejects_same_tag_with_different_digests():
+    prod = {"image": "postgres:16.15@sha256:" + "a" * 64}
+    dev = {"image": "postgres:16.15@sha256:" + "b" * 64}
+    assert image_tag_problems(prod, dev) != []
 
 
 @pytest.mark.parametrize(
