@@ -217,3 +217,36 @@ def test_backfill_of_a_closed_year_passes_because_delay_counts_from_end():
 
     assert len(frame) == 1460
     check_weather_observed(frame, LOCATION_IDS, start, end, MAX_DELAY_DAYS)
+
+
+# ---------------------------------------------------------------------------
+# Hardening follow-ups plan H1, cases 9 to 11: all-NULL columns reread as ``object``
+# ---------------------------------------------------------------------------
+
+
+def _object_column(frame: pd.DataFrame, column: str) -> pd.DataFrame:
+    frame = frame.copy()
+    frame[column] = pd.Series([None] * len(frame), dtype="object")
+    return frame
+
+
+# H1 case 9
+@pytest.mark.parametrize("column", list(VARIABLES))
+def test_all_null_object_variable_passes(column):
+    _check(_object_column(_valid_frame(), column))
+
+
+# H1 case 10
+def test_object_column_with_one_out_of_range_value_still_fails_on_the_range():
+    frame = _object_column(_valid_frame(), "humidity_mean")
+    frame.loc[3, "humidity_mean"] = 101.0
+
+    assert "humidity_mean" in _expect_failure(frame)
+
+
+# H1 case 11
+def test_object_column_with_non_numeric_text_fails_as_a_check_failure():
+    frame = _object_column(_valid_frame(), "precip_mm")
+    frame.loc[3, "precip_mm"] = "abc"
+
+    assert "precip_mm" in _expect_failure(frame)

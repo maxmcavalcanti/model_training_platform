@@ -34,10 +34,19 @@ def file_url(year: int) -> str:
     return f"{BUCKET_URL}/{LOAD_PREFIX}CARGA_ENERGIA_{year}.parquet"
 
 
+def _reject_infinite(numbers: pd.Series, original: pd.Series) -> pd.Series:
+    """Raise when any value is infinite; NaN stays a null load."""
+    infinite = numbers.isin([float("inf"), float("-inf")])
+    if infinite.any():
+        values = sorted({str(value) for value in original[infinite]})
+        raise ValueError(f"non-finite values in {_LOAD_COLUMN}: {values[:_MAX_REPORTED_VALUES]}")
+    return numbers
+
+
 def _normalize_load(series: pd.Series) -> pd.Series:
     """Return the load as float64; blank text becomes null, other bad text raises."""
     if pd.api.types.is_numeric_dtype(series):
-        return series.astype("float64")
+        return _reject_infinite(series.astype("float64"), series)
     text = series.astype("object").map(
         lambda value: value.strip() if isinstance(value, str) else value
     )
@@ -47,7 +56,7 @@ def _normalize_load(series: pd.Series) -> pd.Series:
     if bad.any():
         values = sorted(set(text[bad]))[:_MAX_REPORTED_VALUES]
         raise ValueError(f"non-numeric values in {_LOAD_COLUMN}: {values}")
-    return numbers.astype("float64")
+    return _reject_infinite(numbers.astype("float64"), text)
 
 
 def parse_load(content: bytes) -> pd.DataFrame:

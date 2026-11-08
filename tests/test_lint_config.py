@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 ASSERT_SNIPPET = "def f(x):\n    assert x\n"
 SQL_FSTRING_SNIPPET = 'def q(table):\n    return f"SELECT a FROM {table}"\n'
-PASSWORD_SNIPPET = 'password = "hunter2"\n'
+CREDENTIAL_SNIPPET = 'password = "hunter2"\n'
 BIND_ALL_SNIPPET = 'HOST = "0.0.0.0"\n'
 # The argv is not a literal on purpose: recent ruff versions skip S603 for all-literal argv.
 SUBPROCESS_SNIPPET = (
@@ -80,11 +80,11 @@ def test_string_built_sql_is_still_reported_in_a_new_migration():
 
 
 def test_hardcoded_password_is_reported_in_flows():
-    assert "S105" in reported_security_codes(PASSWORD_SNIPPET, FLOWS_PATH)
+    assert "S105" in reported_security_codes(CREDENTIAL_SNIPPET, FLOWS_PATH)
 
 
 def test_hardcoded_password_is_reported_in_tests():
-    assert "S105" in reported_security_codes(PASSWORD_SNIPPET, TEST_PATH)
+    assert "S105" in reported_security_codes(CREDENTIAL_SNIPPET, TEST_PATH)
 
 
 def test_bind_to_all_interfaces_is_reported_in_production_code():
@@ -141,3 +141,8 @@ def test_repository_passes_ruff_check_with_project_configuration():
         check=False,
     )
     assert result.returncode == 0, result.stdout
+
+
+def test_test_lint_config_file_does_not_ignore_hardcoded_credentials():
+    per_file_ignores = load_ruff_lint_config().get("per-file-ignores", {})
+    assert "S105" not in per_file_ignores.get("tests/test_lint_config.py", [])

@@ -120,6 +120,15 @@ def _null_last_days(count: int) -> Mutation:
     return mutate
 
 
+def _null_variable(variable: str) -> Mutation:
+    """Null one variable on every day of the requested interval."""
+
+    def mutate(payload: Payload) -> None:
+        payload["daily"][variable] = [None] * len(payload["daily"]["time"])
+
+    return mutate
+
+
 def _set_value(variable: str, day: dt.date, value) -> Mutation:
     def mutate(payload: Payload) -> None:
         payload["daily"][variable][_position(payload, day)] = value
@@ -418,6 +427,20 @@ def test_malformed_values_fail_their_locations_without_a_type_error(observed_dat
     rows = _stored(observed_database)
     assert len(rows) == 20
     assert {row[0] for row in rows} == {"belem", "recife"}
+
+
+# H1 case 12
+@pytest.mark.db
+def test_variable_null_on_every_day_and_location_passes_the_check_after_reread(observed_database):
+    source = Source(observed_database, default=_answer(_null_variable("relative_humidity_2m_mean")))
+
+    written = _run_as_ingestor(observed_database, source)
+
+    assert written == 40
+    rows = _stored(observed_database)
+    assert len(rows) == 40
+    assert all(row[6] is None for row in rows)
+    assert all(row[2] is not None for row in rows)
 
 
 # Case 28
