@@ -21,6 +21,8 @@ SERVE_SCRIPT = INFRA_DIR / "scripts" / "tailscale-serve.sh"
 UI_SERVICES = ("health", "mlflow", "prefect-server", "grafana")
 
 MAPPING = re.compile(r"tailscale\s+serve\b.*--https=(\d+)\s+http://127\.0\.0\.1:(\d+)\s*$")
+# Raw TCP mapping (plan 10, Postgres): the target host is captured so non-loopback is reportable.
+TCP_MAPPING = re.compile(r"tailscale\s+serve\b.*--tcp=(\d+)\s+tcp://([^:\s]+):(\d+)\s*$")
 RESET = re.compile(r"^\s*tailscale\s+serve\s+reset\s*$")
 STRICT_MODE = "set -euo pipefail"
 
@@ -74,7 +76,9 @@ def header_problems(script_text: str) -> list[str]:
     if not lines or lines[0] != STRICT_MODE:
         problems.append("script does not start with 'set -euo pipefail'")
     reset_index = next((i for i, line in enumerate(lines) if RESET.match(line)), None)
-    mapping_indexes = [i for i, line in enumerate(lines) if MAPPING.search(line)]
+    mapping_indexes = [
+        i for i, line in enumerate(lines) if MAPPING.search(line) or TCP_MAPPING.search(line)
+    ]
     if reset_index is None:
         problems.append("no 'tailscale serve reset'")
     elif mapping_indexes and reset_index > min(mapping_indexes):
@@ -187,3 +191,146 @@ def test_funnel_check_rejects_funnel_usage(script):
 )
 def test_header_check_rejects_bad_scripts(script, expected_problems):
     assert len(header_problems(script)) == expected_problems
+
+
+# =========================================================================== plan 10
+# Raw TCP exposure of Postgres: ``tailscale serve --tcp=5432 tcp://127.0.0.1:5432`` (P15).
+
+
+def tcp_mappings(script_text: str) -> list[tuple[int, str, int]]:
+    """(tailnet tcp port, target host, target port) per ``--tcp`` line (comments ignored)."""
+    mappings = []
+    for line in code_lines(script_text):
+        match = TCP_MAPPING.search(line)
+        if match:
+            mappings.append((int(match.group(1)), match.group(2), int(match.group(3))))
+    return mappings
+
+
+def tcp_problems(script_text: str, postgres_ports: set[int]) -> list[str]:
+    """Case 7: ``--tcp`` lines and the production postgres loopback ports agree both ways."""
+    problems = []
+    mappings = tcp_mappings(script_text)
+    for tcp_port, host, target_port in mappings:
+        if host != "127.0.0.1":
+            problems.append(f"tcp {tcp_port} targets {host}, not 127.0.0.1")
+        if tcp_port != target_port:
+            problems.append(f"tcp {tcp_port} does not match target {target_port}")
+        if target_port not in postgres_ports:
+            problems.append(f"orphan tcp entry for port {target_port}")
+    targets = {target for _, _, target in mappings}
+    for port in sorted(postgres_ports - targets):
+        problems.append(f"compose port {port} is not served over tcp")
+    return problems
+
+
+def postgres_bind_ip_problems(env_text: str) -> list[str]:
+    """Case 7: P15 requires ``POSTGRES_BIND_IP`` to be exactly 127.0.0.1."""
+    value = parse_env_file(env_text).get("POSTGRES_BIND_IP")
+    if value != "127.0.0.1":
+        return [f"POSTGRES_BIND_IP is {value!r}, expected '127.0.0.1'"]
+    return []
+
+
+@pytest.fixture
+def postgres_loopback_ports() -> set[int]:
+    """Loopback ports of the production ``postgres`` only (the dev compose must not count)."""
+    services = services_of(load_compose(MAIN_COMPOSE))
+    assert "postgres" in services, "infra/docker-compose.yml has no 'postgres' service"
+    return loopback_published_ports(services["postgres"], {})
+
+
+# --------------------------------------------------------------------------- plan 10 policy
+
+
+def test_tcp_lines_and_production_postgres_ports_match_both_ways(
+    script_text, postgres_loopback_ports
+):
+    assert postgres_loopback_ports == {5432}
+    assert tcp_problems(script_text, postgres_loopback_ports) == []
+    assert tcp_mappings(script_text) == [(5432, "127.0.0.1", 5432)]
+
+
+def test_real_script_resets_before_the_tcp_line(script_text):
+    assert tcp_mappings(script_text), "script has no --tcp line"
+    assert header_problems(script_text) == []
+
+
+def test_real_script_https_mappings_do_not_include_postgres(script_text):
+    assert all(https_port != 5432 for https_port, _ in serve_mappings(script_text))
+    assert serve_mappings(script_text), "script has no --https mapping"
+
+
+def test_env_example_postgres_bind_ip_is_exactly_loopback():
+    assert postgres_bind_ip_problems(ENV_EXAMPLE.read_text(encoding="utf-8")) == []
+
+
+# --------------------------------------------------------------------------- plan 10 negatives
+
+TCP_LINE = "tailscale serve --bg --tcp=5432 tcp://127.0.0.1:5432\n"
+
+
+def test_good_script_with_tcp_passes_every_check():
+    script = GOOD_SCRIPT + TCP_LINE
+    assert tcp_mappings(script) == [(5432, "127.0.0.1", 5432)]
+    assert tcp_problems(script, {5432}) == []
+    assert header_problems(script) == []
+    assert mapping_problems(script, {8080}) == []
+
+
+def test_tcp_line_is_not_counted_as_a_ui_mapping():
+    assert serve_mappings(GOOD_SCRIPT + TCP_LINE) == [(8080, 8080)]
+
+
+def test_tcp_check_rejects_mismatched_tailnet_and_target_ports():
+    script = "tailscale serve --bg --tcp=15432 tcp://127.0.0.1:5432\n"
+    assert tcp_problems(script, {5432}) == ["tcp 15432 does not match target 5432"]
+
+
+def test_tcp_check_rejects_non_loopback_target():
+    script = "tailscale serve --bg --tcp=5432 tcp://0.0.0.0:5432\n"
+    assert tcp_problems(script, {5432}) == ["tcp 5432 targets 0.0.0.0, not 127.0.0.1"]
+
+
+def test_tcp_check_rejects_script_without_tcp_line_when_compose_publishes_5432():
+    assert tcp_problems(GOOD_SCRIPT, {5432}) == ["compose port 5432 is not served over tcp"]
+
+
+def test_tcp_check_rejects_orphan_tcp_line():
+    script = TCP_LINE + "tailscale serve --bg --tcp=6000 tcp://127.0.0.1:6000\n"
+    assert tcp_problems(script, {5432}) == ["orphan tcp entry for port 6000"]
+
+
+def test_tcp_check_ignores_commented_lines():
+    script = "# " + TCP_LINE
+    assert tcp_mappings(script) == []
+    assert tcp_problems(script, {5432}) == ["compose port 5432 is not served over tcp"]
+
+
+def test_header_check_rejects_reset_after_a_tcp_line():
+    script = "set -euo pipefail\n" + TCP_LINE + "tailscale serve reset\n"
+    assert header_problems(script) == ["'tailscale serve reset' comes after a mapping line"]
+
+
+def test_header_check_rejects_tcp_line_without_any_reset():
+    script = "set -euo pipefail\n" + TCP_LINE
+    assert header_problems(script) == ["no 'tailscale serve reset'"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "",
+        "HEALTH_BIND_IP=127.0.0.1\n",
+        "POSTGRES_BIND_IP=0.0.0.0\n",
+        "POSTGRES_BIND_IP=100.64.0.1\n",
+        "POSTGRES_BIND_IP=\n",
+        "# POSTGRES_BIND_IP=127.0.0.1\n",
+    ],
+)
+def test_postgres_bind_ip_check_rejects_anything_but_loopback(text):
+    assert postgres_bind_ip_problems(text) != []
+
+
+def test_postgres_bind_ip_check_accepts_loopback():
+    assert postgres_bind_ip_problems("POSTGRES_BIND_IP=127.0.0.1\n") == []

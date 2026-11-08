@@ -406,3 +406,283 @@ def test_mount_check_rejects_missing_relative_sources(tmp_path):
 def test_mount_check_handles_long_syntax(tmp_path):
     volumes = [{"type": "bind", "source": "./absent", "target": "/x"}]
     assert missing_relative_mounts(volumes, tmp_path) == ["./absent"]
+
+
+# =========================================================================== plan 10
+# Production ``postgres`` service in infra/docker-compose.yml (cases 1 to 6 and 8).
+# Case 7 (tailscale serve --tcp) lives in test_tailscale_serve.py.
+
+DEV_COMPOSE = INFRA_DIR / "docker-compose.dev.yml"
+POSTGRES_DATA_DIR = "/var/lib/postgresql/data"
+POSTGRES_PORT = "${POSTGRES_BIND_IP:-127.0.0.1}:5432:5432"
+SCRAM = "scram-sha-256"
+FIXED_MINOR_TAG = re.compile(r"^\d+\.\d+(\.\d+)?$")
+# ``${NAME}`` / ``${NAME:?msg}`` / ``${NAME:-default}``; ``$${NAME}`` is an escape (removed first).
+COMPOSE_REFERENCE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)([^}]*)\}")
+
+
+def postgres_port_problems(service: dict) -> list[str]:
+    """Case 1: exactly one port, 5432 -> 5432, host IP ``${POSTGRES_BIND_IP:-127.0.0.1}``."""
+    ports = service.get("ports") or []
+    if ports != [POSTGRES_PORT]:
+        return [f"expected exactly {[POSTGRES_PORT]}, got {ports}"]
+    return []
+
+
+def named_volume_problems(service: dict, top_level_volumes: object, target: str) -> list[str]:
+    """Case 2: ``target`` is backed by a named volume declared at the top level."""
+    sources = []
+    for volume in service.get("volumes") or []:
+        if isinstance(volume, dict):
+            if volume.get("target") == target:
+                sources.append(volume.get("source"))
+            continue
+        parts = str(volume).split(":")
+        if len(parts) >= 2 and parts[1] == target:
+            sources.append(parts[0])
+    if len(sources) != 1:
+        return [f"expected one mount at {target}, got {sources}"]
+    source = sources[0]
+    if not isinstance(source, str) or source.startswith(("./", "../", "/")):
+        return [f"{source!r} is a bind mount, not a named volume"]
+    declared = top_level_volumes if isinstance(top_level_volumes, dict) else {}
+    if source not in declared:
+        return [f"volume {source!r} is not declared at the top level"]
+    return []
+
+
+def healthcheck_problems(service: dict) -> list[str]:
+    """Case 3: a healthcheck with a non-empty ``test``."""
+    healthcheck = service.get("healthcheck")
+    if not isinstance(healthcheck, dict) or not healthcheck.get("test"):
+        return ["missing healthcheck.test"]
+    return []
+
+
+def image_tag(service: dict) -> str | None:
+    image = service.get("image")
+    if not isinstance(image, str) or ":" not in image:
+        return None
+    return image.rsplit(":", 1)[1]
+
+
+def image_tag_problems(prod: dict, dev: dict) -> list[str]:
+    """Case 5: same tag in prod and dev, and a fixed ``major.minor`` tag."""
+    problems = []
+    prod_tag, dev_tag = image_tag(prod), image_tag(dev)
+    if prod_tag != dev_tag:
+        problems.append(f"prod tag {prod_tag!r} differs from dev tag {dev_tag!r}")
+    if prod_tag is None or not FIXED_MINOR_TAG.match(prod_tag):
+        problems.append(f"tag {prod_tag!r} is not a fixed major.minor tag")
+    return problems
+
+
+def required_variables(compose_text: str) -> set[str]:
+    """Variables referenced without a ``:-`` default (``$${X}`` escapes do not count)."""
+    unescaped = compose_text.replace("$$", "")
+    return {
+        name
+        for name, rest in COMPOSE_REFERENCE.findall(unescaped)
+        if not rest.startswith((":-", "-"))
+    }
+
+
+def undeclared_variables(compose_text: str, env_text: str) -> list[str]:
+    """Case 6: required variables missing from ``.env.example``."""
+    declared = set(parse_env_file(env_text))
+    return sorted(required_variables(compose_text) - declared)
+
+
+def auth_problems(environment: object) -> list[str]:
+    """Case 8: scram-sha-256 for host auth, and no ``trust`` or ``md5`` anywhere."""
+    values = dict(environment_items(environment))
+    problems = []
+    if values.get("POSTGRES_HOST_AUTH_METHOD") != SCRAM:
+        problems.append("POSTGRES_HOST_AUTH_METHOD is not scram-sha-256")
+    if f"--auth-host={SCRAM}" not in (values.get("POSTGRES_INITDB_ARGS") or ""):
+        problems.append("POSTGRES_INITDB_ARGS lacks --auth-host=scram-sha-256")
+    for key, value in values.items():
+        lowered = (value or "").lower()
+        if "trust" in lowered or "md5" in lowered:
+            problems.append(f"{key} mentions trust or md5")
+    return problems
+
+
+@pytest.fixture
+def main_compose() -> dict:
+    return load_compose(MAIN_COMPOSE)
+
+
+@pytest.fixture
+def postgres_service(main_compose: dict) -> dict:
+    service = services_of(main_compose).get("postgres")
+    assert service is not None, "infra/docker-compose.yml has no 'postgres' service"
+    return service
+
+
+# --------------------------------------------------------------------------- plan 10 policy
+
+
+def test_postgres_publishes_only_5432_on_loopback_default(postgres_service):
+    assert postgres_port_problems(postgres_service) == []
+
+
+def test_postgres_data_dir_is_a_declared_named_volume(postgres_service, main_compose):
+    problems = named_volume_problems(
+        postgres_service, main_compose.get("volumes"), POSTGRES_DATA_DIR
+    )
+    assert problems == []
+
+
+def test_postgres_has_a_healthcheck(postgres_service):
+    assert healthcheck_problems(postgres_service) == []
+
+
+def test_postgres_password_comes_from_an_env_reference(postgres_service):
+    environment = postgres_service.get("environment")
+    assert "POSTGRES_PASSWORD" in dict(environment_items(environment))
+    assert literal_secret_keys(environment) == []
+
+
+def test_postgres_image_tag_matches_dev_and_is_fixed(postgres_service):
+    dev_service = services_of(load_compose(DEV_COMPOSE))["postgres"]
+    assert image_tag_problems(postgres_service, dev_service) == []
+
+
+def test_every_required_compose_variable_is_declared_in_env_example():
+    compose_text = MAIN_COMPOSE.read_text(encoding="utf-8")
+    env_text = ENV_EXAMPLE.read_text(encoding="utf-8")
+    assert undeclared_variables(compose_text, env_text) == []
+
+
+def test_postgres_requires_its_admin_variables_in_env_example(postgres_service):
+    # Guards against dropping the ``:?`` / reference form: the vars must be required and declared.
+    compose_text = MAIN_COMPOSE.read_text(encoding="utf-8")
+    env_keys = set(parse_env_file(ENV_EXAMPLE.read_text(encoding="utf-8")))
+    required = required_variables(compose_text)
+    for name in ("POSTGRES_ADMIN_USER", "POSTGRES_ADMIN_PASSWORD"):
+        assert name in required, f"{name} is not a required variable of the compose file"
+        assert name in env_keys, f"{name} is missing from infra/.env.example"
+
+
+def test_postgres_authentication_is_scram_sha_256(postgres_service):
+    assert auth_problems(postgres_service.get("environment")) == []
+
+
+# --------------------------------------------------------------------------- plan 10 negatives
+
+
+def test_postgres_port_check_accepts_the_expected_port():
+    assert postgres_port_problems({"ports": [POSTGRES_PORT]}) == []
+
+
+@pytest.mark.parametrize(
+    "ports",
+    [
+        ["${POSTGRES_BIND_IP}:5432:5432"],
+        ["5432:5432"],
+        ["0.0.0.0:5432:5432"],
+        ["127.0.0.1:15432:5432"],
+        [POSTGRES_PORT, "127.0.0.1:5433:5432"],
+        [],
+    ],
+)
+def test_postgres_port_check_rejects_everything_else(ports):
+    assert postgres_port_problems({"ports": ports}) != []
+
+
+def test_postgres_port_check_rejects_missing_ports_key():
+    assert postgres_port_problems({}) != []
+
+
+def test_named_volume_check_accepts_declared_named_volume():
+    service = {"volumes": [f"pgdata:{POSTGRES_DATA_DIR}"]}
+    assert named_volume_problems(service, {"pgdata": {}}, POSTGRES_DATA_DIR) == []
+
+
+@pytest.mark.parametrize(
+    ("service", "top_level"),
+    [
+        ({"volumes": [f"./pgdata:{POSTGRES_DATA_DIR}"]}, {"pgdata": {}}),
+        ({"volumes": [f"../pgdata:{POSTGRES_DATA_DIR}"]}, {"pgdata": {}}),
+        ({"volumes": [f"/srv/pg:{POSTGRES_DATA_DIR}"]}, {"pgdata": {}}),
+        ({"volumes": [f"pgdata:{POSTGRES_DATA_DIR}"]}, {}),
+        ({"volumes": [f"pgdata:{POSTGRES_DATA_DIR}"]}, None),
+        ({"volumes": [f"other:{POSTGRES_DATA_DIR}"]}, {"pgdata": {}}),
+        ({"volumes": ["pgdata:/somewhere/else"]}, {"pgdata": {}}),
+        ({}, {"pgdata": {}}),
+    ],
+)
+def test_named_volume_check_rejects_bind_mounts_and_undeclared_volumes(service, top_level):
+    assert named_volume_problems(service, top_level, POSTGRES_DATA_DIR) != []
+
+
+@pytest.mark.parametrize("service", [{}, {"healthcheck": {}}, {"healthcheck": {"test": []}}])
+def test_healthcheck_check_rejects_missing_or_empty_test(service):
+    assert healthcheck_problems(service) != []
+
+
+def test_healthcheck_check_accepts_a_test():
+    assert healthcheck_problems({"healthcheck": {"test": ["CMD", "true"]}}) == []
+
+
+def test_image_tag_check_accepts_same_fixed_minor_tag():
+    service = {"image": "postgres:16.15"}
+    assert image_tag_problems(service, {"image": "postgres:16.15"}) == []
+
+
+@pytest.mark.parametrize(
+    ("prod", "dev"),
+    [
+        ("postgres:16", "postgres:16"),
+        ("postgres:latest", "postgres:latest"),
+        ("postgres", "postgres"),
+        ("postgres:16.15", "postgres:16.14"),
+        ("postgres:16.15", "postgres:16"),
+    ],
+)
+def test_image_tag_check_rejects_floating_or_diverging_tags(prod, dev):
+    assert image_tag_problems({"image": prod}, {"image": dev}) != []
+
+
+def test_undeclared_variables_reports_required_ones_only():
+    compose_text = "a: ${A}\nb: ${B:?x}\nc: ${C:-y}\nd: $${POSTGRES_USER}\n"
+    assert undeclared_variables(compose_text, "A=1\n") == ["B"]
+
+
+def test_undeclared_variables_is_empty_when_all_required_are_declared():
+    compose_text = "a: ${A}\nb: ${B:?x}\nc: ${C:-y}\n"
+    assert undeclared_variables(compose_text, "A=1\nB=2\n") == []
+
+
+def test_undeclared_variables_ignores_commented_env_entries():
+    assert undeclared_variables("a: ${A}\n", "# A=1\n") == ["A"]
+
+
+GOOD_AUTH = {
+    "POSTGRES_USER": "${POSTGRES_ADMIN_USER:?required}",
+    "POSTGRES_PASSWORD": "${POSTGRES_ADMIN_PASSWORD:?required}",
+    "POSTGRES_DB": "ml",
+    "POSTGRES_HOST_AUTH_METHOD": SCRAM,
+    "POSTGRES_INITDB_ARGS": f"--auth-host={SCRAM}",
+}
+
+
+def test_auth_check_accepts_scram_configuration():
+    assert auth_problems(GOOD_AUTH) == []
+
+
+@pytest.mark.parametrize(
+    "environment",
+    [
+        {k: v for k, v in GOOD_AUTH.items() if k != "POSTGRES_HOST_AUTH_METHOD"},
+        {**GOOD_AUTH, "POSTGRES_HOST_AUTH_METHOD": "trust"},
+        {**GOOD_AUTH, "POSTGRES_HOST_AUTH_METHOD": "md5"},
+        {k: v for k, v in GOOD_AUTH.items() if k != "POSTGRES_INITDB_ARGS"},
+        {**GOOD_AUTH, "POSTGRES_INITDB_ARGS": "--auth-host=md5"},
+        {**GOOD_AUTH, "POSTGRES_INITDB_ARGS": f"--auth-host={SCRAM} --auth-local=trust"},
+        None,
+    ],
+)
+def test_auth_check_rejects_missing_trust_and_md5(environment):
+    assert auth_problems(environment) != []
