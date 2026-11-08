@@ -412,3 +412,31 @@ def test_parse_load_ignores_orphan_row_with_null_float_load():
 
     assert len(frame) == 8
     assert list(frame["date"]).count(dt.date(2026, 11, 5)) == 4
+
+
+# ---------------------------------------------------------------------------
+# Hardening follow-ups plan H1, cases 1 and 2: non-finite load is rejected
+# ---------------------------------------------------------------------------
+
+
+# H1 case 1
+@pytest.mark.parametrize("value", ["inf", "-inf", "+inf", "Infinity"])
+def test_parse_load_rejects_non_finite_text_load(text_dtype, value):
+    rows = _text_two_days()
+    rows[2] = (rows[2][0], rows[2][1], value)
+
+    with pytest.raises(ValueError, match="val_cargaenergiamwmed") as error_info:
+        parse_load(_to_parquet(_text_frame(rows, text_dtype)))
+
+    if value == "inf":
+        assert "inf" in str(error_info.value)
+
+
+# H1 case 2
+@pytest.mark.parametrize("value", [float("inf"), float("-inf")])
+def test_parse_load_rejects_non_finite_float_load(value):
+    rows = _grid()
+    rows[2] = (rows[2][0], rows[2][1], value)
+
+    with pytest.raises(ValueError, match="val_cargaenergiamwmed"):
+        parse_load(_to_parquet(_frame(rows)))

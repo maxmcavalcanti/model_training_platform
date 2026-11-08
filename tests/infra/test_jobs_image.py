@@ -130,6 +130,16 @@ def dockerignore_problems(text: str) -> list[str]:
     return problems
 
 
+def key_material_problems(text: str) -> list[str]:
+    """H1 cases 13 to 15: ``.pem`` and ``.key`` files are excluded at any depth."""
+    patterns = {
+        line.strip().rstrip("/")
+        for line in text.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    }
+    return [f"missing {pattern}" for pattern in ("**/*.pem", "**/*.key") if pattern not in patterns]
+
+
 # --------------------------------------------------------------------------- policy tests
 
 
@@ -265,6 +275,24 @@ def test_dockerignore_check_accepts_deep_env_patterns(text):
 )
 def test_dockerignore_check_rejects_root_only_or_incomplete_patterns(text):
     assert dockerignore_problems(text) != []
+
+
+# H1 case 13
+def test_dockerignore_excludes_key_material_at_any_depth():
+    assert DOCKERIGNORE.is_file(), f"{DOCKERIGNORE} does not exist"
+    assert key_material_problems(DOCKERIGNORE.read_text(encoding="utf-8")) == []
+
+
+# H1 case 14
+@pytest.mark.parametrize("text", ["**/*.pem\n**/*.key\n", "# keys\n**/*.key\n**/*.pem\n"])
+def test_key_material_check_accepts_deep_patterns(text):
+    assert key_material_problems(text) == []
+
+
+# H1 case 15
+@pytest.mark.parametrize("text", ["*.pem\n*.key\n", "**/*.pem\n", "**/*.key\n"])
+def test_key_material_check_rejects_root_only_or_incomplete_patterns(text):
+    assert key_material_problems(text) != []
 
 
 # =========================================================================== plan 16

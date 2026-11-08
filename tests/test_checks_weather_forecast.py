@@ -144,3 +144,35 @@ def test_two_failures_at_once_raise_a_single_error_naming_both_columns():
 
     assert "temp_max" in message
     assert "precip_mm" in message
+
+
+# ---------------------------------------------------------------------------
+# Hardening follow-ups plan H1, cases 7 and 8: all-NULL columns reread as ``object``
+# ---------------------------------------------------------------------------
+
+
+def _all_null(frame: pd.DataFrame, *columns: str) -> pd.DataFrame:
+    for column in columns:
+        frame[column] = pd.Series([None] * len(frame), dtype="object")
+    return frame
+
+
+# H1 case 7
+@pytest.mark.parametrize(
+    "columns",
+    [("humidity_mean",), ("temp_max", "temp_min")],
+    ids=["humidity_mean", "temp_max_and_temp_min"],
+)
+def test_all_null_object_columns_pass(columns):
+    frame = _all_null(_valid_frame(), *columns)
+
+    check(frame, WEATHER_FORECAST_SCHEMA, expected_rows=EXPECTED_ROWS)
+
+
+# H1 case 8
+def test_object_column_with_one_out_of_range_value_still_fails_on_the_range():
+    frame = _valid_frame()
+    frame["temp_max"] = pd.Series([None] * len(frame), dtype="object")
+    frame.loc[3, "temp_max"] = 51.0
+
+    assert "temp_max" in _expect_failure(frame)
