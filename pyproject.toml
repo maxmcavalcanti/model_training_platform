@@ -33,9 +33,8 @@ select = ["E", "F", "I", "B", "UP", "S"]
 [tool.ruff.lint.per-file-ignores]
 # pytest relies on bare assert; SQL in tests is built from test constants, never external input
 "tests/**" = ["S101", "S608"]
-# the test deliberately feeds a fake password literal to ruff to prove S105 still fires
-# in tests, and runs ruff through subprocess with a fixed argv
-"tests/test_lint_config.py" = ["S105", "S603"]
+# runs ruff through subprocess with a fixed argv
+"tests/test_lint_config.py" = ["S603"]
 # git is looked up on PATH on purpose so the test runs on any developer machine and on CI;
 # "0.0.0.0" literals are inputs the compose checkers must reject, not binds
 "tests/infra/test_compose.py" = ["S607", "S104"]

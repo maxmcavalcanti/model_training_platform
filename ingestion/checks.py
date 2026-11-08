@@ -39,7 +39,7 @@ def _describe(error: pandera.errors.SchemaErrors) -> str:
 
 
 def _temperature() -> pa.Column:
-    return pa.Column(float, pa.Check.in_range(-10, 50), nullable=True)
+    return pa.Column(float, pa.Check.in_range(-10, 50), nullable=True, coerce=True)
 
 
 def _min_not_above_max(df: pd.DataFrame) -> pd.Series:
@@ -50,9 +50,9 @@ def _weather_variable_columns() -> dict[str, pa.Column]:
     return {
         "temp_max": _temperature(),
         "temp_min": _temperature(),
-        "precip_mm": pa.Column(float, pa.Check.ge(0), nullable=True),
-        "wind_speed_max": pa.Column(float, pa.Check.ge(0), nullable=True),
-        "humidity_mean": pa.Column(float, pa.Check.in_range(0, 100), nullable=True),
+        "precip_mm": pa.Column(float, pa.Check.ge(0), nullable=True, coerce=True),
+        "wind_speed_max": pa.Column(float, pa.Check.ge(0), nullable=True, coerce=True),
+        "humidity_mean": pa.Column(float, pa.Check.in_range(0, 100), nullable=True, coerce=True),
     }
 
 

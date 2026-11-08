@@ -50,6 +50,10 @@ def upsert(
     schema, separator, name = table.partition(".")
     if not separator or not schema or not name or "." in name:
         raise ValueError(f"table must be 'schema.table', got {table!r}")
+    if not keys:
+        raise ValueError("keys must name at least one column")
+    if on_conflict not in ("update", "ignore"):
+        raise ValueError(f"on_conflict must be 'update' or 'ignore', got {on_conflict!r}")
     if rows.empty:
         return 0
 
