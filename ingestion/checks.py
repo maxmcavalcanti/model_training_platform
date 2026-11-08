@@ -57,3 +57,30 @@ WEATHER_FORECAST_SCHEMA = pa.DataFrameSchema(
     unique=["location_id", "issued_at", "target_date"],
     strict=False,
 )
+
+
+def _weekday_matches_date(df: pd.DataFrame) -> pd.Series:
+    return df["weekday"] == df["date"].map(lambda day: day.isoweekday())
+
+
+def _holiday_flag_matches_name(df: pd.DataFrame) -> pd.Series:
+    has_name = df["holiday_name"].notna() & (df["holiday_name"] != "")
+    return df["is_national_holiday"] == has_name
+
+
+CALENDAR_SCHEMA = pa.DataFrameSchema(
+    {
+        "date": pa.Column(nullable=False, unique=True),
+        "weekday": pa.Column(int, pa.Check.in_range(1, 7), nullable=False),
+        "is_national_holiday": pa.Column(bool, nullable=False),
+        "holiday_name": pa.Column(nullable=True),
+    },
+    checks=[
+        pa.Check(_weekday_matches_date, error="weekday must match the ISO weekday of date"),
+        pa.Check(
+            _holiday_flag_matches_name,
+            error="is_national_holiday must be true if and only if holiday_name is set",
+        ),
+    ],
+    strict=False,
+)

@@ -10,7 +10,13 @@ import httpx
 import pandas as pd
 import sqlalchemy
 
-from ingestion.checks import WEATHER_FORECAST_SCHEMA, CheckFailed, check
+from ingestion.calendar_ref import build_calendar
+from ingestion.checks import (
+    CALENDAR_SCHEMA,
+    WEATHER_FORECAST_SCHEMA,
+    CheckFailed,
+    check,
+)
 from ingestion.db import upsert
 from ingestion.http import NetworkError
 from ingestion.openmeteo import (
@@ -110,3 +116,35 @@ def ingest_weather_forecast(
         expected_rows - inserted,
     )
     return inserted
+
+
+_CALENDAR_REREAD_STATEMENT = sqlalchemy.text(
+    'SELECT "date", weekday, is_national_holiday, holiday_name FROM ref.calendar '
+    'WHERE "date" BETWEEN :start AND :end ORDER BY "date"'
+)
+
+
+def load_calendar(engine: sqlalchemy.Engine, start: date, end: date) -> int:
+    """Upsert ref.calendar for ``start`` to ``end`` (inclusive) and check what was stored."""
+    rows = build_calendar(start, end)
+    with engine.begin() as conn:
+        written = upsert(
+            conn,
+            "ref.calendar",
+            rows,
+            keys=["date"],
+            on_conflict="update",
+            stamp_ingested_at=False,
+        )
+        stored = pd.read_sql_query(
+            _CALENDAR_REREAD_STATEMENT, conn, params={"start": start, "end": end}
+        )
+    check(stored, CALENDAR_SCHEMA, expected_rows=(end - start).days + 1)
+    logger.info(
+        "calendar ok: %d days from %s to %s, %d national holidays",
+        len(stored),
+        start,
+        end,
+        int(stored["is_national_holiday"].sum()),
+    )
+    return written

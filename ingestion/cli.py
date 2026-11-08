@@ -9,6 +9,7 @@ import sys
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date
 
 import httpx
 
@@ -46,6 +47,30 @@ SUBCOMMANDS["weather-forecast"] = Subcommand(
     help="Snapshot today's weather forecast for every location into raw.weather_forecast",
     add_arguments=_add_weather_forecast_arguments,
     run=_run_weather_forecast,
+)
+
+
+def _add_calendar_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--start", type=date.fromisoformat, required=True, help="first day (ISO)")
+    parser.add_argument("--end", type=date.fromisoformat, required=True, help="last day (ISO)")
+
+
+def _run_calendar(args: argparse.Namespace) -> int:
+    from ingestion import jobs
+    from ingestion.db import build_engine
+
+    engine = build_engine()
+    try:
+        jobs.load_calendar(engine, args.start, args.end)
+    finally:
+        engine.dispose()
+    return 0
+
+
+SUBCOMMANDS["calendar"] = Subcommand(
+    help="Load ref.calendar (one row per day, national holidays) for a date range",
+    add_arguments=_add_calendar_arguments,
+    run=_run_calendar,
 )
 
 
