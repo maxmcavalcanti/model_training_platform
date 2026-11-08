@@ -1,9 +1,10 @@
 # 09 — Tabela `ref.locations` com as quatro capitais
 
 > Executa: agente. Depende de: 07 (na `main`). Branch sugerida: `feat/ref-locations`.
-> Pré-requisito: ADR 0005 (`docs/adr/0005-data-contract-v1.md`), já mergeado em `a22c0df`. Falta só o usuário confirmar o formato do slug (seção 9, P1) **antes do test-writer**, porque os testes fixam a regex.
+> Pré-requisito: ADR 0005 (`docs/adr/0005-data-contract-v1.md`), já mergeado em `a22c0df`. Formato do slug (seção 9, P1) **confirmado pelo usuário em 2026-11-07**: `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`. Sem coluna `timezone` (seção 9, P2), também confirmado.
 > TDD: test-writer (vermelho) → implementação (verde) → refatorar.
 > Revisão 2026-11-07: alinhado à `main` em `a22c0df` (migrações 0001 e 0002, `tests/conftest.py`, padrões de `tests/test_permissions.py` e `tests/test_upsert.py`, ADR 0005).
+> Revisão 2026-11-07: P1 e P2 resolvidas pelo usuário; implementado na `main` em `5ef914c` (#21).
 
 ## 1. Objetivo
 
@@ -50,6 +51,8 @@ ADR 0005 (`docs/adr/0005-data-contract-v1.md`), P18:
 > `location_id` é texto em slug minúsculo, sem acento e sem espaço, por exemplo `sao_paulo`, `porto_alegre`, `recife`, `belem`. É a chave de `ref.locations` e a chave estrangeira em `raw.weather_observed` e `raw.weather_forecast`, e aparece como `key` de modelos de chuva em `predictions.model_predictions`. Um valor fora do formato (por exemplo `São Paulo`) é recusado pela tabela.
 >
 > Em aberto: o formato exato do slug (conjunto de caracteres permitido e restrição no banco). O plano do PR 09 propõe `^[a-z_]+$` via `CHECK`; confirmar no PR 09.
+
+(O ponto em aberto do ADR foi fechado neste plano: P1 confirmada com `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`, ver seção 9.)
 
 `.claude/rules/migrations-e-dados.md`:
 
@@ -101,7 +104,7 @@ command.upgrade(alembic_config(), "head")
 
 ## 5. Passos
 
-1. (usuário) Confirmar P1 (formato do slug) da seção 9. Se escolher outra regex, ajustar a seção 5, passo 4, e os casos 5 e 6 antes do test-writer.
+1. (usuário) ~~Confirmar P1 (formato do slug) da seção 9.~~ Feito em 2026-11-07: regex `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`, como no passo 4 e nos casos 5 e 6; sem coluna `timezone` (P2).
 2. (test-writer) Escreva `tests/test_ref_locations.py` com os casos da seção 8, seguindo os padrões da seção 4 (leituras em `migrated_database`; escritas e `downgrade` num fixture próprio sobre `fresh_database` + `upgrade head`). Rode `uv run pytest tests/test_ref_locations.py` e confirme que falham porque `ref.locations` não existe (`UndefinedTable`) ou porque a revisão `0003` não existe. Rode `uv run ruff check .` e `uv run ruff format --check .`. Commit `test: add ref.locations tests`.
 3. (implementer) Partindo da branch com os testes: `uv run alembic revision -m "ref_locations" --rev-id 0003`. Confira que `down_revision = "0002"`. Ajuste os imports como na seção 4 (só `from alembic import op`; apague o comentário do template). Escreva no docstring do módulo uma linha dizendo que a migração cria e carrega a tabela e que as permissões vêm dos privilégios padrão da `0002`.
 4. `upgrade`, primeiro `op.execute`, a tabela (nomes de restrição fixos, os testes conferem o nome):
@@ -169,13 +172,13 @@ Já existentes, que precisam continuar verdes sem edição: `tests/test_migratio
 
 ## 9. Riscos e perguntas em aberto
 
-- **P1 (decisão do usuário, antes do test-writer): regex do slug.** O ADR 0005 deixou para este PR. A versão anterior deste plano propunha `^[a-z_]+$`, que aceita `_`, `__`, `recife_` e `sao__paulo` e recusa dígitos. Proposta: `^[a-z][a-z0-9]*(_[a-z0-9]+)*$` (começa com letra, palavras de `a-z0-9` separadas por um único `_`). Aceita as quatro capitais e casos como `rio_de_janeiro`; recusa acento, maiúscula, espaço, hífen, `_` na ponta e `_` duplo. Se o usuário preferir `^[a-z_]+$`, tirar dos casos 5 e 6 os exemplos `_recife`, `recife_`, `sao__paulo` e `zona2` (este passa a ser recusado). A regex vira contrato: mudar depois exige migração, ADR e aviso.
-- **P2 (decisão do usuário): fuso por local.** Os PRs 14 e 24 fixam `timezone=America/Sao_Paulo` para todas as cidades. As 4 capitais estão em UTC-3 sem horário de verão, então hoje não há erro. Uma cidade em outro fuso (Manaus, Cuiabá, Rio Branco) teria "o dia" do Open-Meteo deslocado. Recomendação: não adicionar coluna agora (fica fora do modelo de dados e do ADR 0005) e registrar a limitação no aviso à cientista; se for adicionar, é agora ou com migração + ADR + aviso depois.
+- **P1 (resolvida pelo usuário em 2026-11-07): regex do slug.** Confirmada `^[a-z][a-z0-9]*(_[a-z0-9]+)*$` (começa com letra, palavras de `a-z0-9` separadas por um único `_`). Aceita as quatro capitais e casos como `rio_de_janeiro` e `zona2`; recusa acento, maiúscula, espaço, hífen, `_` na ponta, `_` duplo e dígito no início. A alternativa `^[a-z_]+$` da versão anterior foi descartada. A regex vira contrato: mudar depois exige migração, ADR e aviso.
+- **P2 (resolvida pelo usuário em 2026-11-07): fuso por local.** Sem coluna `timezone`. Os PRs 14 e 24 fixam `timezone=America/Sao_Paulo` para todas as cidades; as 4 capitais estão em UTC-3 sem horário de verão, então hoje não há erro. Uma cidade em outro fuso (Manaus, Cuiabá, Rio Branco) teria "o dia" do Open-Meteo deslocado; adicionar a coluna depois exige migração + ADR + aviso. A limitação vai no aviso à cientista.
 - **Coordenadas.** Com 2 casas decimais (~1 km), o ponto cai no centro da cidade; bastam para a grade do Open-Meteo (~11 km na previsão, ~25 km no ERA5 do arquivo histórico). Recife -8.05/-34.88 e Belém -1.46/-48.49 são aproximações do centro; o usuário pode trocar por outro ponto de referência (por exemplo, a estação do INMET) antes do merge, ajustando passo 5 e caso 1.
 - **Caso 1 em `head`.** Se uma migração futura de dados adicionar cidades, o caso 1 precisará ser atualizado nesse PR; isso é esperado (é mudança de contrato).
 - **Comparação de `double precision`.** Os valores do passo 5 voltam do Postgres como os mesmos `float` do Python (literais idênticos, sem aritmética); comparar por igualdade é seguro.
 - **Remover cidade.** `ingestor` não tem `DELETE` em `ref` (privilégios da `0002`). Remover uma cidade depois que houver dados em `raw.weather_*` também esbarra na chave estrangeira. Remoção é tarefa do admin, por migração.
-- **Produção.** O item 12 (`docs/plans/12-subir-postgres-vps-manual.md`) já espera `select count(*) from ref.locations` = `4` como `scientist` e `permission denied` no `INSERT`; este plano é coerente com isso. As migrações precisam rodar com o mesmo admin para os privilégios padrão valerem (docstring da `0002`).
+- **Produção.** O item 12 (`docs/plans/12-subir-postgres-vps-manual.md`) espera as 4 linhas (`belem`, `porto_alegre`, `recife`, `sao_paulo`) como `scientist` e `permission denied` no `INSERT`; este plano é coerente com isso. As migrações precisam rodar com o mesmo admin para os privilégios padrão valerem (docstring da `0002`).
 - **Postgres de teste.** O comando de subida citado em `tests/conftest.py` é `docker compose -f infra/docker-compose.dev.yml up -d`; o `AGENTS.md` ainda diz que o Postgres de teste não existe (linha obsoleta, fora do escopo).
 
 ### Aviso à ciência de dados
@@ -183,15 +186,15 @@ Já existentes, que precisam continuar verdes sem edição: `tests/test_migratio
 A regra exige aviso para mudança em `ref`. Quem envia é o usuário (passo 9), quando a `0003` estiver em produção. Conteúdo mínimo:
 
 - Existe `ref.locations` (`location_id`, `name`, `lat`, `lon`, `subsystem`), chave `location_id`, com 4 linhas: `sao_paulo` (SE), `porto_alegre` (S), `recife` (NE), `belem` (N).
-- `location_id` é slug minúsculo no formato `<regex confirmada em P1>`; é a chave usada em `raw.weather_forecast` e `raw.weather_observed` e a `key` dos modelos de chuva em `predictions.model_predictions` (ADR 0005).
+- `location_id` é slug minúsculo no formato `^[a-z][a-z0-9]*(_[a-z0-9]+)*$` (começa com letra; letras minúsculas sem acento e dígitos; palavras separadas por um único `_`); é a chave usada em `raw.weather_forecast` e `raw.weather_observed` e a `key` dos modelos de chuva em `predictions.model_predictions` (ADR 0005).
 - `subsystem` usa os códigos do ONS `SE`, `S`, `NE`, `N`; `SE` é Sudeste/Centro-Oeste. São os mesmos de `raw.ons_daily_load`.
 - `lat`/`lon` (2 casas) são o ponto consultado no Open-Meteo, não uma área.
 - Não assumir uma cidade por subsistema nem exatamente 4 cidades: cidades novas entram por dado e podem repetir subsistema. Ler a lista da tabela, nunca fixar no código do modelo.
 - O papel `scientist` só lê a tabela; pedido de cidade nova vai para a plataforma.
-- O "dia" dos dados de clima é o de `America/Sao_Paulo` (PRs 14 e 24), válido para as 4 capitais (todas UTC-3).
+- O "dia" dos dados de clima é o de `America/Sao_Paulo` (PRs 14 e 24), válido para as 4 capitais (todas UTC-3). Não há coluna de fuso por local.
 
 ## 10. Decisões que exigem ADR
 
-- Nenhum ADR novo. O ADR 0005 (mergeado) cobre `ref.locations` no formato de `location_id` e remete os demais tipos e colunas a este plano e a `docs/plataforma-ml.md`; ele mesmo diz que a regex se confirma "no PR 09", então a confirmação de P1 pelo usuário basta para destravar este PR.
-- Opcional, decisão do usuário: uma emenda curta ao ADR 0005 (PR só de `docs/**`) registrando a regex escolhida e fechando o ponto em aberto. Não bloqueia este PR.
-- Se P2 for decidido como "adicionar `timezone`", isso muda o modelo de dados de `ref` e exige ADR (novo ou emenda ao 0005) mergeado antes deste PR.
+- Nenhum ADR novo. O ADR 0005 (mergeado) cobre `ref.locations` no formato de `location_id` e remete os demais tipos e colunas a este plano e a `docs/plataforma-ml.md`; ele mesmo diz que a regex se confirma "no PR 09", e a confirmação de P1 pelo usuário (2026-11-07) fecha esse ponto.
+- Opcional, decisão do usuário: uma emenda curta ao ADR 0005 (PR só de `docs/**`) registrando a regex confirmada e trocando o "Em aberto" (que ainda cita `^[a-z_]+$`). Não bloqueia nada.
+- P2 foi decidida como "sem `timezone`"; adicionar a coluna no futuro muda o modelo de dados de `ref` e exige ADR (novo ou emenda ao 0005), migração e aviso.
