@@ -1,3 +1,5 @@
 # Interim schedule until Prefect (ADR 0004). Times are America/Sao_Paulo (TZ from the image).
 # The forecast job snapshots "today" in America/Sao_Paulo: keep it far from midnight.
 30 6 * * * python -m ingestion weather-forecast
+# ons-load time and window are provisional until the ONS publication delay is measured (plan 22).
+0 7 * * * python -m ingestion ons-load

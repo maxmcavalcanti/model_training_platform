@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 import pandas as pd
 import pandera.errors
 import pandera.pandas as pa
@@ -84,3 +86,54 @@ CALENDAR_SCHEMA = pa.DataFrameSchema(
     ],
     strict=False,
 )
+
+
+ONS_DAILY_LOAD_SCHEMA = pa.DataFrameSchema(
+    {
+        "subsystem": pa.Column(nullable=False, checks=pa.Check.isin(["SE", "S", "NE", "N"])),
+        "date": pa.Column(nullable=False),
+        "load_avg_mw": pa.Column(
+            float,
+            pa.Check.in_range(0, 100000, include_min=False, include_max=False),
+            nullable=False,
+        ),
+    },
+    unique=["subsystem", "date"],
+    strict=False,
+)
+
+_ONS_SUBSYSTEM_COUNT = 4
+
+
+def check_ons_daily_load(df: pd.DataFrame, start: date, end: date, max_delay_days: int) -> None:
+    """Check stored ONS daily load: schema, 4 subsystems per day, continuity and freshness.
+
+    All problems are reported together in a single :class:`CheckFailed`.
+    """
+    problems: list[str] = []
+    try:
+        ONS_DAILY_LOAD_SCHEMA.validate(df, lazy=True)
+    except pandera.errors.SchemaErrors as error:
+        problems.append(_describe(error))
+
+    if df.empty:
+        problems.append(f"no rows between {start} and {end}")
+    else:
+        counts = df.groupby("date").size()
+        for day, count in counts.items():
+            if count != _ONS_SUBSYSTEM_COUNT:
+                problems.append(f"{day} has {count} rows, expected {_ONS_SUBSYSTEM_COUNT}")
+        present = set(counts.index)
+        last = max(present)
+        missing = [
+            day.isoformat()
+            for day in (start + timedelta(days=n) for n in range((last - start).days + 1))
+            if day not in present
+        ]
+        if missing:
+            problems.append(f"missing dates: {', '.join(missing)}")
+        limit = end - timedelta(days=max_delay_days)
+        if last < limit:
+            problems.append(f"stale: last date {last} is older than {limit}")
+    if problems:
+        raise CheckFailed("; ".join(problems))
