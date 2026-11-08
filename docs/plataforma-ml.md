@@ -201,8 +201,8 @@ A previsão do tempo entra no ar logo na Fase 2, porque cada dia sem coletar é 
 - [x] Postgres, migrações com Alembic, usuários e permissões
 - [x] `ref.locations`, `ref.calendar` (calendário com 5844 dias e 151 feriados nacionais)
 - [x] Ingestão do ONS + backfill desde 2015 + checagens (em produção em 2026-11-08: `raw.ons_daily_load` com 4 subsistemas, de 2015-01-01 a 2026-11-06, 4327 dias por subsistema; a única lacuna é 2015-04-09, da própria fonte. Horário das 07:00, janela de 30 dias e atraso máximo de 5 dias são provisórios até fechar o item 18)
-- [ ] Pronto quando: ela consulta `raw.ons_daily_load` do notebook dela via Tailscale
-  - Nota: o papel `reader` foi validado em 2026-11-08, consultando do notebook do usuário via Tailscale. Falta a confirmação da cientista de dados com o papel `scientist`.
+- [x] Pronto quando: ela consulta `raw.ons_daily_load` do notebook dela via Tailscale
+  - Nota: Fase 1 concluída em 2026-11-08. O `reader` foi validado do notebook do dono via Tailscale; a confirmação com o papel `scientist` passa a ser verificação da cientista, fora do escopo deste projeto, guiada por `docs/acesso-cientista.md`.
 
 **Fase 2 — Clima**
 
