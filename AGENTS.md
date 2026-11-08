@@ -34,6 +34,9 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
 - Um arquivo: `uv run pytest tests/test_smoke.py`
 - Um teste: `uv run pytest tests/test_smoke.py::<test_name>`
 - Adicionar dependência: `uv add <pacote>` (dev: `uv add --dev <pacote>`). Sempre commitar `uv.lock`.
+- CLI local: `uv run python -m ingestion --help`
+- Imagem dos jobs: `docker build -f infra/jobs/Dockerfile -t platform-jobs .`
+- Na VPS (até o PR 37 a imagem é construída lá, ADR 0004): `docker compose -f infra/docker-compose.yml build jobs` e `docker compose -f infra/docker-compose.yml run --rm jobs <comando>` (ex.: `alembic upgrade head`)
 - Postgres de teste local: `docker compose -f infra/docker-compose.dev.yml up -d`
 - Rodar só testes sem banco: `uv run pytest -m "not db"`
 - Aplicar migrações: `uv run alembic upgrade head` (usa `DATABASE_URL_ADMIN` ou `DATABASE_URL`)
