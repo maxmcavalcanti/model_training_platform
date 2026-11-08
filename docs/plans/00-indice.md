@@ -86,6 +86,18 @@ Legenda: **A** = agente implementa; **U** = usuário executa (VPS, Tailscale, co
 | 58 | Painel de erro | 5 | 49, 51 | A | sim | Erro real × previsto com médias móveis |
 | 59 | Alertas, backups e pronto da Fase 5 | 5 | 54, 55, 56, 57, 58 | U | — | **Fase 5 pronta** |
 
+### Segurança em CI (pós-Fase 2)
+
+Fase própria, decidida no ADR 0006 (`docs/adr/0006-security-validation-in-ci.md`). Os ids S1 a S5 não renumeram os itens acima. Entra depois da Fase 2 e o item S5 precisa estar pronto antes de o deploy automático (PR 39) entrar. Os planos 37 e 39 passam a pin por SHA com comentário `# vX.Y.Z`; o alinhamento entra no PR S1.
+
+| Id | Título | Fase | Depende de | Quem | Testes | Valor entregue |
+| --- | --- | --- | --- | --- | --- | --- |
+| S1 | Pin por SHA das actions e `permissions` no `ci.yml` (também imagens por digest) | Segurança em CI | 27 | A | não (verificação por comandos) | Tags de action não redirecionáveis; token do CI com o mínimo |
+| S2 | `dependabot.yml` e `SECURITY.md` | Segurança em CI | S1 | A | não (verificação por comandos) | SHAs e digests mantidos por PRs semanais |
+| S3 | Workflow `security.yml` (zizmor, dependency-review, Trivy) | Segurança em CI | S1 | A | não (verificação por comandos) | Varredura de workflows, dependências e Dockerfile, só avisando |
+| S4 | Regra `S` do `ruff` | Segurança em CI | S1 | A | sim | Lint de segurança Python com ignores justificados |
+| S5 | Settings de segurança e checks required (manual) | Segurança em CI | S2, S3 | U | — | Settings conferidas por `gh api`; checks required após 2 semanas sem achados |
+
 Totais: 46 PRs de agente (45 com TDD; o 01 não tem, por ser o bootstrap) e 15 itens do usuário (um deles, o 28b, condicional).
 
 ## Grafo de dependências
