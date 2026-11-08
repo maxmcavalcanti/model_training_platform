@@ -17,6 +17,7 @@ from ingestion.checks import (
     CheckFailed,
     check,
     check_ons_daily_load,
+    check_weather_observed,
 )
 from ingestion.db import upsert
 from ingestion.http import NetworkError
@@ -26,6 +27,7 @@ from ingestion.openmeteo import (
     MAX_HORIZON_DAYS,
     Location,
     fetch_forecast,
+    fetch_observed,
 )
 
 logger = logging.getLogger(__name__)
@@ -204,5 +206,87 @@ def ingest_ons_load(
         start,
         end,
         stored["date"].max(),
+    )
+    return written
+
+
+# Provisional until roadmap item 18 measures the ERA5 delay and revisions (plan 24, D8).
+OBSERVED_WINDOW_DAYS = 10
+OBSERVED_MAX_DELAY_DAYS = 7
+OBSERVED_END_LAG_DAYS = 1
+
+_OBSERVED_TABLE = "raw.weather_observed"
+_OBSERVED_KEYS = ["location_id", "date"]
+_OBSERVED_REREAD_STATEMENT = sqlalchemy.text(
+    'SELECT location_id, "date", temp_max, temp_min, precip_mm, wind_speed_max, humidity_mean '
+    'FROM raw.weather_observed WHERE "date" BETWEEN :start AND :end '
+    'ORDER BY location_id, "date"'
+)
+
+
+def ingest_weather_observed(
+    engine: sqlalchemy.Engine,
+    client: httpx.Client,
+    start: date,
+    end: date,
+    *,
+    max_delay_days: int = OBSERVED_MAX_DELAY_DAYS,
+    base_delay: float = 1.0,
+) -> int:
+    """Upsert observed weather for ``start`` to ``end`` (inclusive) and check what was stored.
+
+    A location that fails does not stop the others; the job still ends with an error
+    naming the failed locations.
+    """
+    if start > end:
+        raise ValueError(f"start {start} is after end {end}")
+
+    with engine.connect() as conn:
+        locations = list_locations(conn)
+
+    frames: list[pd.DataFrame] = []
+    failed: list[str] = []
+    for location in locations:
+        try:
+            frames.append(fetch_observed(client, location, start, end, base_delay=base_delay))
+        except (NetworkError, ValueError, httpx.HTTPError) as error:
+            logger.error("observed weather failed for %s: %s", location.location_id, error)
+            failed.append(location.location_id)
+
+    written = 0
+    if frames:
+        rows = pd.concat(frames, ignore_index=True)
+        if not rows.empty:
+            with engine.begin() as conn:
+                written = upsert(
+                    conn, _OBSERVED_TABLE, rows, keys=_OBSERVED_KEYS, on_conflict="update"
+                )
+
+    with engine.connect() as conn:
+        stored = pd.read_sql_query(
+            _OBSERVED_REREAD_STATEMENT, conn, params={"start": start, "end": end}
+        )
+    check_error: CheckFailed | None = None
+    try:
+        check_weather_observed(
+            stored, [location.location_id for location in locations], start, end, max_delay_days
+        )
+    except CheckFailed as error:
+        check_error = error
+
+    if failed:
+        message = f"observed weather failed for locations: {', '.join(failed)}"
+        if check_error is not None:
+            message += f"; {check_error}"
+        raise PartialIngestionError(message)
+    if check_error is not None:
+        raise check_error
+
+    logger.info(
+        "weather-observed ok: %d locations, %d rows written from %s to %s",
+        len(locations),
+        written,
+        start,
+        end,
     )
     return written
