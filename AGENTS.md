@@ -43,6 +43,7 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
 - Imagem dos jobs: `docker build -f infra/jobs/Dockerfile -t platform-jobs .`
 - Agendador interino (supercronic, até o PR 36): validar o crontab com `docker run --rm platform-jobs supercronic -test /app/infra/cron/crontab`; na VPS: `docker compose -f infra/docker-compose.yml build scheduler`, `docker compose -f infra/docker-compose.yml up -d scheduler` e `docker compose -f infra/docker-compose.yml logs scheduler`
 - Na VPS (até o PR 37 a imagem é construída lá, ADR 0004): `docker compose -f infra/docker-compose.yml build jobs` e `docker compose -f infra/docker-compose.yml run --rm jobs <comando>` (ex.: `alembic upgrade head`)
+- Validar o dependabot.yml: `uvx --from check-jsonschema==0.39.0 check-jsonschema --builtin-schema vendor.dependabot .github/dependabot.yml`
 - Postgres de teste local: `docker compose -f infra/docker-compose.dev.yml up -d`
 - Rodar só testes sem banco: `uv run pytest -m "not db"`
 - Aplicar migrações: `uv run alembic upgrade head` (usa `DATABASE_URL_ADMIN` ou `DATABASE_URL`)
@@ -61,4 +62,5 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
   6. CI + `pr-reviewer`, que revisa o PR contra o plano (dispensado em PR só de `docs/**`, ver abaixo).
 - PR que altera somente `docs/**` (planos, ADRs, guias) dispensa o `code-reviewer` e o `pr-reviewer`: o usuário revisa se quiser e o merge pode ser feito sem revisão de agente. Qualquer PR que toque algo fora de `docs/**` (por exemplo `.claude/`, `AGENTS.md`, `CLAUDE.md`, `.gitignore`, código, infra ou CI) passa por ambos, mesmo quando só há Markdown, porque esses arquivos mudam o comportamento dos agentes ou do deploy.
 - Uma fase do roadmap por vez. Não adiante itens de fases futuras.
+- PR do Dependabot que troca o `postgres` de `infra/docker-compose.yml`: levar o mesmo `tag@sha256:` ao serviço `postgres` do `.github/workflows/ci.yml` (e ao `infra/docker-compose.dev.yml`, se o Dependabot não o atualizar), por commit na própria branch do Dependabot; o teste `test_postgres_reference_is_identical_in_prod_dev_and_ci` fica vermelho até isso. Merge de PR do Dependabot que muda `infra/` só chega à VPS pelo deploy manual do usuário (ADR 0004), fora da janela dos jobs.
 - Dê evidência de que funciona: o comando rodado e a saída, não só "deve funcionar".
