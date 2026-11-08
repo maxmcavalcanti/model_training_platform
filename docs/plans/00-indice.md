@@ -142,17 +142,18 @@ Caminho crítico até ligar `raw.weather_forecast` (prioridade do doc): 01 → 0
 | P4 | Rede | **Só Tailscale**. Sem domínio, sem proxy com autenticação, sem certificado público, sem 443 pública. HTTPS e acesso por `tailscale serve` (um hostname `*.ts.net`, uma porta por UI) (ADR 0003). A 22 pública fica aberta só no provisionamento e é fechada quando o SSH pela tailnet funciona | 02, 03, 04, 10, 12, 28, 29, 30, 31, 35, 38, 39, 40, 47, 50, 55, 56 |
 | P5 | Coleta da previsão antes do ONS | **Aprovada**: 13–17 ficam antes do ONS, como planejado | 13, 14, 15, 17 |
 | P15 | Postgres na tailnet | **Loopback + `tailscale serve --tcp=5432`**: `127.0.0.1:5432`, sem sidecar do Tailscale no compose e sem dependência da ordem de boot; o `After=tailscaled.service` deixa de ser necessário (ADR 0003) | 02, 03, 10, 12 |
+| P6 | Deploy manual até a Fase 3 (2026-11-07) | **Aceito** como exceção registrada a "nada de SSH manual para mudar produção"; termina no PR 39, quando o merge na `main` volta a ser a única forma de mudar produção (ADR 0004, `docs/adr/0004-interim-operation-before-prefect.md`) | 04, 12 |
+| P7 | Agendador interino e `restart` em `profiles` (2026-11-07) | **Supercronic no compose**; serviços em `profiles` (execução única) dispensam `restart: unless-stopped` (ADR 0004) | 11, 16 |
+| P8 | `issued_at` e horizontes (2026-11-07) | **`date`, o primeiro snapshot vence, horizontes 1 a 7** (`horizon_days`). Guardar o horizonte 0 segue a avaliar com a cientista (ADR 0005, `docs/adr/0005-data-contract-v1.md`) | 13 |
+| P9 | `ingested_at` no upsert (2026-11-07) | **Última escrita**, sem coluna nova (ADR 0005) | 08 |
+| P18 | Formato de `location_id` (2026-11-07) | **Slug minúsculo** (`sao_paulo`) (ADR 0005) | 09 |
 
 ## Pontos de decisão em aberto para o usuário
 
-Decidir antes do PR indicado. Os marcados com ADR precisam do ADR aprovado antes do código. A numeração P6–P18 foi mantida (a P15 está em "Decisões resolvidas") para não quebrar as referências nas specs.
+Decidir antes do PR indicado. Os marcados com ADR precisam do ADR aprovado antes do código. A numeração P6–P18 foi mantida (a P15, a P6, a P7, a P8, a P9 e a P18 estão em "Decisões resolvidas") para não quebrar as referências nas specs.
 
 | Id | Pergunta | Recomendação deste plano | Bloqueia |
 | --- | --- | --- | --- |
-| P6 (ADR) | Deploy manual (SSH + `git pull` + `compose up`) até a Fase 3, como exceção a "nada de SSH manual para mudar produção" | Aceitar como exceção temporária e registrada; termina no PR 39 | 04, 12 |
-| P7 (ADR, junto com P6) | Agendador interino: supercronic no compose (recomendado) ou crontab do host? Serviços em `profiles` (execução única) dispensam `restart: unless-stopped`? | Supercronic; sim para a exceção de profiles | 11, 16 |
-| P8 (ADR de contrato) | `issued_at` como `date` (um snapshot por dia, o primeiro vence) ou `timestamptz`? Guardar horizonte 0? | `date`, primeiro vence, horizontes 1 a 7; avaliar horizonte 0 com a cientista | 13 |
-| P9 | `ingested_at` no upsert com atualização: "última escrita" ou "primeira entrada" + `updated_at`? | Última escrita (sem coluna nova) | 08 |
 | P10 | Backfill de previsões passadas pela API "Historical Forecast" do Open-Meteo? O doc exclui | Fora do escopo agora; vale uma conversa com a cientista, porque resolveria a "decisão dela" sobre treinar com previsão | — |
 | P11 | Onde vive o modelo de teste (média móvel)? | No repo `models`, com PR aprovado por ela | 50 |
 | P12 (ADR de execução) | Como o score sabe a versão do pacote `models`? Esquema de tags do repo `models` | Tag `models_package=<tag git>` na versão do modelo no MLflow; semver | 43, 44 |
@@ -160,7 +161,6 @@ Decidir antes do PR indicado. Os marcados com ADR precisam do ADR aprovado antes
 | P14 (ADR de contrato) | De onde vem o "real" do monitoramento? | Função `load_actuals(conn, target_date)` no módulo dela | 53 |
 | P16 (ADR) | Backup: destino (B2 ou S3), agendamento (systemd no host ou Prefect), criptografia | B2, systemd, avaliar `rclone crypt` | 57, 59 |
 | P17 | Monitor externo para quando o próprio Prefect cair? Com rede só Tailscale, um monitor de uptime externo não alcança a VPS | Heartbeat de saída: o vigia pinga um serviço tipo healthchecks.io; a falta do ping gera o aviso | 56 |
-| P18 (ADR de contrato) | Formato de `location_id` | Slug minúsculo (`sao_paulo`) | 09 |
 
 Perguntas menores, registradas na seção 9 de cada spec: gravar dado fora de faixa antes de falhar (15); "só leitura" da cientista no Prefect não é garantido pelo OSS, e sem proxy a ACL é a única barreira (30); camada opcional de autenticação embutida do Prefect (30); uma credencial ou dois workers para ingestão e score, lembrando o custo de memória (46); montar `/` do host no worker para medir disco (56); checar memória no vigia (56); ligar o recurso "Tailscale SSH" exigiria replanejar 38 e 39 (02, 39); restrição de portas do `tailscale serve` na versão instalada (03).
 
@@ -169,16 +169,16 @@ Perguntas menores, registradas na seção 9 de cada spec: gravar dado fora de fa
 - `docs/adr/0001-english-naming-convention.md`: convenção de nomes em inglês.
 - `docs/adr/0002-python-toolchain-and-package-layout.md`: toolchain Python e layout de pacotes (P1).
 - `docs/adr/0003-tailscale-only-network.md`: rede só Tailscale (P4, P15).
+- `docs/adr/0004-interim-operation-before-prefect.md`: operação interina, deploy manual e supercronic (P6, P7); será marcado `superseded` nos PRs 36 e 39. Com ele mergeado, os PRs 11 e 16 deixam de estar bloqueados por esse ADR.
+- `docs/adr/0005-data-contract-v1.md`: contrato de dados v1 de `raw` e `ref` (P8, P9, P18). Com ele mergeado, os PRs 09 e 13 deixam de estar bloqueados por esse ADR.
 
 ## ADRs a escrever (o planner não escreve ADR)
 
 O número de cada ADR é dado quando ele for escrito.
 
-1. Operação interina antes do Prefect: deploy manual e supercronic (P6, P7) — antes do 11/16; marcado `superseded` nos PRs 36 e 39.
-2. Contrato de dados v1 de `raw` e `ref` (P8, P18) — antes do 09.
-3. Execução de modelos (P12, P13) — antes do 42; precisa da concordância da cientista.
-4. Fonte do real no monitoramento (P14) — antes do 53; precisa da concordância dela.
-5. Backup (P16) — antes do 57.
+1. Execução de modelos (P12, P13) — antes do 42; precisa da concordância da cientista.
+2. Fonte do real no monitoramento (P14) — antes do 53; precisa da concordância dela.
+3. Backup (P16) — antes do 57.
 
 ## Desvios em relação às instruções do `task-planner`
 

@@ -25,7 +25,7 @@ Fase 1 — "Postgres, migrações com Alembic, usuários e permissões" (parte "
 | Caminho | Motivo |
 | --- | --- |
 | `pyproject.toml`, `uv.lock` | Dependência `alembic` (passo 0) |
-| `alembic.ini` | Config na raiz, `script_location = migrations`, sem `sqlalchemy.url` |
+| `alembic.ini` | Config na raiz, `script_location = %(here)s/migrations`, sem `sqlalchemy.url` |
 | `migrations/env.py` | Lê a URL de `DATABASE_URL_ADMIN` (ou `DATABASE_URL`) via `ingestion.db.build_engine`; modo online apenas |
 | `migrations/script.py.mako` | Template do Alembic ajustado para gerar revisões que passam no ruff |
 | `migrations/versions/0001_schemas.py` | Cria os cinco schemas; `downgrade` os remove |
@@ -73,7 +73,7 @@ def build_engine(url: str | None = None) -> sqlalchemy.Engine:
    - Escreva `tests/test_migrations.py` com os casos da seção 8 (os que tocam banco com `@pytest.mark.db`). Casos 2, 3 e 4 usam `fresh_database` (alteram o banco ou não podem compartilhá-lo); caso 1 usa `migrated_database`; caso 5 não usa banco. Nos testes que chamam o Alembic diretamente, defina `DATABASE_URL_ADMIN` com a fixture `monkeypatch`.
    - Confirme a falha porque `alembic.ini` não existe. Commit `test: add migration tests`.
 2. (implementer) `uv run alembic init migrations`. Ele cria `alembic.ini` na raiz e `migrations/` com `env.py`, `script.py.mako`, `README` e `versions/`.
-3. Em `alembic.ini`: mantenha `script_location = migrations`; apague a linha `sqlalchemy.url = driver://user:pass@localhost/dbname` (a URL vem só do ambiente). Em `migrations/env.py`: apague o modo offline e os imports que ficarem sem uso (`engine_from_config`, `pool`), e monte a engine assim:
+3. Em `alembic.ini`: use `script_location = %(here)s/migrations` (caminho relativo ao `alembic.ini`, independente do diretório corrente); apague a linha `sqlalchemy.url = driver://user:pass@localhost/dbname` (a URL vem só do ambiente). Em `migrations/env.py`: apague o modo offline e os imports que ficarem sem uso (`engine_from_config`, `pool`), e monte a engine assim:
 
    ```python
    import os
@@ -103,7 +103,7 @@ def build_engine(url: str | None = None) -> sqlalchemy.Engine:
    ```
 
    Se nenhuma das duas variáveis existir, `build_engine(None)` já levanta `MissingConfiguration("DATABASE_URL is not set")`. `disable_existing_loggers=False` evita que o Alembic desligue loggers de quem o chama (pytest, jobs).
-4. Ajuste `migrations/script.py.mako` para que a revisão gerada passe em `ruff check` com as regras `UP` e `F`: `from collections.abc import Sequence` em vez de `typing.Sequence`, `str | None` em vez de `Union[str, None]`, e sem `import sqlalchemy as sa` se a revisão não o usar (deixe-o no template comentado ou remova-o; a revisão que precisar adiciona). Confira o template que a versão instalada do Alembic gerou antes de editar.
+4. Ajuste `migrations/script.py.mako` para que a revisão gerada passe em `ruff check` com as regras `UP` e `F`: `from collections.abc import Sequence` em vez de `typing.Sequence`, `str | None` em vez de `Union[str, None]`, e sem os imports `from alembic import op` e `import sqlalchemy as sa` no template (uma revisão vazia gerada com eles reprova em `F401`; a revisão que precisar de `op` ou `sa` os adiciona). Confira o template que a versão instalada do Alembic gerou antes de editar.
 5. Convenção de revisões: ids numéricos sequenciais com 4 dígitos, passados por `--rev-id`. Rode `uv run alembic revision -m "schemas" --rev-id 0001` (o `file_template` padrão gera `0001_schemas.py`).
 6. Em `0001_schemas.py`: `upgrade` executa `CREATE SCHEMA IF NOT EXISTS <s>` para os cinco schemas; `downgrade` executa `DROP SCHEMA IF EXISTS <s>` (sem `CASCADE`, para falhar alto se algo ficou para trás). Use `op.execute`.
 7. No `ci.yml`: no service `postgres`, acrescente `POSTGRES_DB: ml_ci` ao `env` (o banco `postgres` continua existindo, então `DATABASE_URL_TEST` não muda); antes do `uv run pytest`, acrescente o passo `uv run alembic upgrade head` com `env: DATABASE_URL_ADMIN: postgresql+psycopg://postgres:postgres@localhost:5432/ml_ci` no próprio passo.

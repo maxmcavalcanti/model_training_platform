@@ -140,7 +140,7 @@ Downstream que fixa o contrato desta função (não implementar agora, só respe
      - `stamp_ingested_at=True` e a tabela não tem `ingested_at`;
      - `stamp_ingested_at=True` e o DataFrame traz uma coluna `ingested_at` (o carimbo nunca vem do DataFrame);
      - chave duplicada dentro do próprio DataFrame (o Postgres recusaria `ON CONFLICT DO UPDATE` afetando a mesma linha duas vezes no mesmo comando; a mensagem diz `duplicate`).
-   - Usa `sqlalchemy.dialects.postgresql.insert`, um comando `INSERT ... VALUES (...), (...)` por lote (lista de dicts em `.values(...)`), para o `rowcount` ser confiável.
+   - Usa `sqlalchemy.dialects.postgresql.insert`, um comando `INSERT ... VALUES (...), (...)` por lote (lista de dicts em `.values(...)`), para o `rowcount` ser confiável. Com SQLAlchemy 2.1 e psycopg 3.3 o `rowcount` de um INSERT com lista de valores só é confiável se o comando for executado com `execution_options(preserve_rowcount=True)`. Use essa opção em cada `execute` do lote.
    - `ingested_at` = `sqlalchemy.func.now()` do servidor, no insert e, no modo `update`, também no `SET` do conflito. Todas as linhas da mesma transação ficam com o mesmo valor.
    - `update` → `on_conflict_do_update(index_elements=keys, set_={c: excluded.c for c em colunas não-chave do DataFrame} + ingested_at=now())`. Se não houver nenhuma coluna a atualizar (todas as colunas são chave e `stamp_ingested_at=False`), comporta-se como `ignore`.
    - `ignore` → `on_conflict_do_nothing(index_elements=keys)`.
