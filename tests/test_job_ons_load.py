@@ -371,6 +371,87 @@ def test_start_after_end_raises_value_error_before_any_request():
 
 
 # ---------------------------------------------------------------------------
+# ONS source-gaps plan (2026-11-08), cases 36 to 38: 2015 file with text load and empty days
+# ---------------------------------------------------------------------------
+
+TextRow = tuple[str, dt.date, str]
+GAP_DAY = dt.date(2015, 4, 9)
+
+
+def _text_parquet(rows: list[TextRow]) -> bytes:
+    """Parquet like ``_parquet`` but with the load as text, as in ONS files up to 2021."""
+    frame = pd.DataFrame(
+        {
+            "id_subsistema": pd.Series([r[0] for r in rows], dtype="object"),
+            "nom_subsistema": pd.Series([SUBSYSTEM_NAMES.get(r[0], r[0]) for r in rows]),
+            "din_instante": pd.Series(
+                [dt.datetime.combine(r[1], dt.time()) for r in rows], dtype="datetime64[ns]"
+            ),
+            "val_cargaenergiamwmed": pd.Series([r[2] for r in rows], dtype="object"),
+        }
+    )
+    buffer = io.BytesIO()
+    frame.to_parquet(buffer)
+    return buffer.getvalue()
+
+
+def _text_year_2015(empty: set[tuple[str, dt.date]]) -> FileFactory:
+    """Full 2015 grid, load as text, with ``""`` for the given (subsystem, date) keys."""
+    rows: list[TextRow] = [
+        (code, day, "" if (code, day) in empty else str(load))
+        for code, day, load in _grid(dt.date(2015, 1, 1), dt.date(2015, 12, 31))
+    ]
+    content = _text_parquet(rows)
+    return lambda: httpx.Response(200, content=content)
+
+
+def _backfill_2015(url: str, source: Source) -> int:
+    return _run_as_ingestor(url, source, start=dt.date(2015, 1, 1), end=dt.date(2015, 12, 31))
+
+
+# Case 36
+@pytest.mark.db
+def test_backfill_of_2015_with_the_empty_known_gap_day_passes(load_database):
+    empty = {(code, GAP_DAY) for code in LOADS}
+    source = Source({2015: _text_year_2015(empty)})
+
+    written = _backfill_2015(load_database, source)
+
+    assert written == 1456
+    assert len(_stored(load_database)) == 1456
+    assert _stored(load_database, "\"date\" = '2015-04-09'") == []
+    assert len(source.requests) == 1
+    assert source.requests[0].url.path.endswith("CARGA_ENERGIA_2015.parquet")
+
+
+# Case 37
+@pytest.mark.db
+def test_backfill_of_2015_with_an_unknown_empty_day_writes_then_fails(load_database):
+    other_day = dt.date(2015, 7, 1)
+    empty = {(code, day) for code in LOADS for day in (GAP_DAY, other_day)}
+    source = Source({2015: _text_year_2015(empty)})
+
+    with pytest.raises(CheckFailed) as error_info:
+        _backfill_2015(load_database, source)
+
+    assert "2015-07-01" in str(error_info.value)
+    assert len(_stored(load_database)) == 1452
+
+
+# Case 38
+@pytest.mark.db
+def test_backfill_of_2015_with_a_partial_known_gap_day_writes_then_fails(load_database):
+    empty = {(code, GAP_DAY) for code in ("SE", "S", "NE")}
+    source = Source({2015: _text_year_2015(empty)})
+
+    with pytest.raises(CheckFailed) as error_info:
+        _backfill_2015(load_database, source)
+
+    assert "2015-04-09" in str(error_info.value)
+    assert len(_stored(load_database)) == 1457
+
+
+# ---------------------------------------------------------------------------
 # CLI (no database)
 # ---------------------------------------------------------------------------
 

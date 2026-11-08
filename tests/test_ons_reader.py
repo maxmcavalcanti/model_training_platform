@@ -258,3 +258,157 @@ def test_fetch_load_propagates_404_without_retry():
 
     assert len(harness.requests) == 1
     assert harness.sleeps == []
+
+
+# ---------------------------------------------------------------------------
+# ONS source-gaps plan (2026-11-08), cases 19 to 27: load stored as text, as in files up to 2021
+# ---------------------------------------------------------------------------
+
+SUBSYSTEM_CODES = ["SE", "S", "NE", "N"]
+
+TextRow = tuple[str, dt.datetime, str | None]
+
+
+@pytest.fixture(params=["object", "str"])
+def text_dtype(request) -> str:
+    """Pandas dtype of the text load column (``str`` is the pandas 3 default for strings)."""
+    return request.param
+
+
+def _text_frame(rows: list[TextRow], dtype: str) -> pd.DataFrame:
+    """Like ``_frame`` but with ``val_cargaenergiamwmed`` as text."""
+    frame = _frame([(r[0], r[1], None) for r in rows])
+    frame["val_cargaenergiamwmed"] = pd.Series([r[2] for r in rows], dtype=dtype)
+    return frame
+
+
+def _text_grid(first: dt.datetime, last: dt.datetime) -> list[TextRow]:
+    """Every day from ``first`` to ``last`` times the four subsystems, load as text."""
+    rows: list[TextRow] = []
+    day = first
+    while day <= last:
+        for index, code in enumerate(SUBSYSTEM_CODES):
+            rows.append((code, day, str(1000.0 + index * 10 + day.day)))
+        day += dt.timedelta(days=1)
+    return rows
+
+
+def _text_two_days() -> list[TextRow]:
+    return [
+        (code, day, f"{1000.0 + index * 10 + number}")
+        for number, day in enumerate(DAYS)
+        for index, code in enumerate(SUBSYSTEM_CODES)
+    ]
+
+
+def _keys(frame: pd.DataFrame) -> set[tuple[str, dt.date]]:
+    return set(zip(frame["subsystem"], frame["date"], strict=True))
+
+
+# Case 19 (characterization: already passes before the fix)
+def test_parse_load_converts_text_load_to_float64(text_dtype):
+    rows = _text_two_days()
+    rows[0] = ("SE", DAYS[0], "41234.5")
+
+    frame = parse_load(_to_parquet(_text_frame(rows, text_dtype)))
+
+    assert len(frame) == 8
+    assert frame["load_avg_mw"].dtype == "float64"
+    se = frame[(frame["subsystem"] == "SE") & (frame["date"] == dt.date(2026, 11, 5))]
+    assert se["load_avg_mw"].iloc[0] == 41234.5
+
+
+# Case 20
+def test_parse_load_drops_row_with_empty_text_load(text_dtype):
+    rows = _text_two_days()
+    rows[2] = (rows[2][0], rows[2][1], "")
+
+    frame = parse_load(_to_parquet(_text_frame(rows, text_dtype)))
+
+    assert len(frame) == 7
+    assert list(frame.index) == list(range(7))
+    assert not frame["load_avg_mw"].isna().any()
+    assert (rows[2][0], dt.date(2026, 11, 5)) not in _keys(frame)
+
+
+# Case 21
+@pytest.mark.parametrize("blank", ["   ", "\t", " \n ", None])
+def test_parse_load_drops_row_with_blank_or_null_text_load(text_dtype, blank):
+    rows = _text_two_days()
+    rows[2] = (rows[2][0], rows[2][1], blank)
+
+    frame = parse_load(_to_parquet(_text_frame(rows, text_dtype)))
+
+    assert len(frame) == 7
+    assert (rows[2][0], dt.date(2026, 11, 5)) not in _keys(frame)
+
+
+# Case 22
+def test_parse_load_strips_spaces_around_text_load(text_dtype):
+    rows = _text_two_days()
+    rows[0] = ("SE", DAYS[0], " 41234.5 ")
+
+    frame = parse_load(_to_parquet(_text_frame(rows, text_dtype)))
+
+    assert len(frame) == 8
+    se = frame[(frame["subsystem"] == "SE") & (frame["date"] == dt.date(2026, 11, 5))]
+    assert se["load_avg_mw"].iloc[0] == 41234.5
+
+
+# Case 23
+@pytest.mark.parametrize("value", ["abc", "12,5", "nan"])
+def test_parse_load_rejects_non_numeric_text_load(text_dtype, value):
+    rows = _text_two_days()
+    rows[2] = (rows[2][0], rows[2][1], value)
+
+    with pytest.raises(ValueError, match="val_cargaenergiamwmed"):
+        parse_load(_to_parquet(_text_frame(rows, text_dtype)))
+
+
+# Case 24
+def test_parse_load_drops_a_whole_empty_day(text_dtype):
+    rows = [
+        (code, day, "" if day == dt.datetime(2015, 4, 9) else load)
+        for code, day, load in _text_grid(dt.datetime(2015, 4, 8), dt.datetime(2015, 4, 10))
+    ]
+
+    frame = parse_load(_to_parquet(_text_frame(rows, text_dtype)))
+
+    assert len(frame) == 8
+    assert dt.date(2015, 4, 9) not in set(frame["date"])
+    for day in (dt.date(2015, 4, 8), dt.date(2015, 4, 10)):
+        assert set(frame.loc[frame["date"] == day, "subsystem"]) == set(SUBSYSTEM_CODES)
+
+
+# Case 25
+def test_parse_load_ignores_orphan_row_with_empty_load(text_dtype):
+    rows = _text_grid(dt.datetime(2013, 2, 1), dt.datetime(2013, 2, 3))
+    expected = next(r[2] for r in rows if r[0] == "S" and r[1] == dt.datetime(2013, 2, 2))
+    rows.append(("S", dt.datetime(2013, 2, 2, 0, 0, 1), ""))
+
+    frame = parse_load(_to_parquet(_text_frame(rows, text_dtype)))
+
+    assert len(frame) == 12
+    orphaned = frame[(frame["subsystem"] == "S") & (frame["date"] == dt.date(2013, 2, 2))]
+    assert len(orphaned) == 1
+    assert orphaned["load_avg_mw"].iloc[0] == float(expected)
+
+
+# Case 26
+def test_parse_load_rejects_non_midnight_row_with_text_load(text_dtype):
+    rows = _text_grid(dt.datetime(2013, 2, 1), dt.datetime(2013, 2, 3))
+    rows.append(("S", dt.datetime(2013, 2, 2, 0, 0, 1), "123.0"))
+
+    with pytest.raises(ValueError, match="midnight"):
+        parse_load(_to_parquet(_text_frame(rows, text_dtype)))
+
+
+# Case 27
+def test_parse_load_ignores_orphan_row_with_null_float_load():
+    rows = _grid()
+    rows.append(("S", dt.datetime(2026, 11, 5, 0, 0, 1), None))
+
+    frame = parse_load(_to_parquet(_frame(rows)))
+
+    assert len(frame) == 8
+    assert list(frame["date"]).count(dt.date(2026, 11, 5)) == 4
