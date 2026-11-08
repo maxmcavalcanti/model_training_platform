@@ -36,7 +36,15 @@ Duas fontes públicas, gratuitas e diárias, que se conversam: o clima explica b
 **Para verificar antes da Fase 1:**
 
 - [ ] Com que atraso o ONS publica o dia anterior, e se revisa dados já publicados
+  - Verificado em 2026-11-08 (domingo), ~11:50 BRT (14:50 UTC): o prefixo `dataset/carga_energia_di/` tem um arquivo por ano, nos três formatos, com o padrão `CARGA_ENERGIA_<ANO>.parquet` (também `.csv` e `.xlsx`), de 2000 a 2026, mais `DicionarioDados_Carga_Energia_Diaria.json` e `.pdf`.
+  - `CARGA_ENERGIA_2026.parquet` tem `LastModified` 2026-11-07T22:00:35Z (19:00 BRT de sábado). Os arquivos de anos fechados não mudam há meses (2025: 2026-01-31; 2022 a 2024: 2025-07-28), o que sugere que o ONS reescreve o ano inteiro de tempos em tempos.
+  - Esquema do parquet de 2026 (1236 linhas, 4 colunas): `id_subsistema` (string; códigos `N`, `NE`, `S`, `SE`), `nom_subsistema` (string; `Norte`, `Nordeste`, `Sul`, `Sudeste/Centro-Oeste`), `din_instante` (datetime64[ns], só a data, sem hora), `val_cargaenergiamwmed` (float64, MWmed). Atenção: o código do Sudeste/Centro-Oeste é `SE`, não `SE/CO`.
+  - Medição de atraso nº 1: no domingo 2026-11-08, ~11:50 BRT, a última data no arquivo de 2026 era 2026-11-05 (quinta-feira), ou seja, D−3 (os quatro subsistemas presentes nessa data). O dia D−1 (sábado) e o D−2 (sexta) ainda não estavam no arquivo. Uma medição só, num fim de semana: não basta para fixar o horário.
+  - **Pendente:** (a) atraso em mais 2 dias diferentes, por volta das 07:00 BRT, em dias úteis: baixar `CARGA_ENERGIA_2026.parquet`, anotar `max(din_instante)` e o `LastModified` do objeto, e concluir "o dia D−1 está disponível às __:__"; (b) revisões: guardar o arquivo de hoje (2026-11-08), baixar de novo em 2026-11-15 e comparar `val_cargaenergiamwmed` por (`id_subsistema`, `din_instante`) nos dias já presentes, anotando se mudaram e até quantos dias para trás (a janela de upsert do doc é de 30 dias).
 - [ ] Atraso do arquivo ERA5 do Open-Meteo para os dias mais recentes
+  - Verificado em 2026-11-08, ~11:50 BRT: a consulta a `archive-api.open-meteo.com/v1/archive` para São Paulo (latitude -23.55, longitude -46.63, `timezone=America/Sao_Paulo`) de 2026-10-29 a 2026-11-08 devolveu as cinco variáveis diárias (`temperature_2m_max`, `temperature_2m_min`, `precipitation_sum`, `wind_speed_10m_max`, `relative_humidity_2m_mean`) não nulas em todos os 11 dias, inclusive o do dia da consulta (2026-11-08). Última data não nula: 2026-11-08, atraso observado de 0 dias nessa consulta (abaixo da janela de 10 dias do doc).
+  - Ressalva: valor para o dia corrente provavelmente não é dado final da reanálise (pode ser parcial ou preenchido por outro modelo); o `archive` não informa a origem. Isso não foi verificado.
+  - **Pendente:** se os valores recentes mudam de um dia para o outro. Procedimento: guardar a resposta desta mesma consulta (últimos 10 dias) hoje, repetir amanhã e daqui a 7 dias, e comparar os valores dos dias em comum, anotando quais dias mudaram e a magnitude.
 
 ## Stack na VPS
 
