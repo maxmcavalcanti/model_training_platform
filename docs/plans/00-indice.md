@@ -93,7 +93,7 @@ Fase própria, decidida no ADR 0006 (`docs/adr/0006-security-validation-in-ci.md
 | Id | Título | Fase | Depende de | Quem | Testes | Valor entregue |
 | --- | --- | --- | --- | --- | --- | --- |
 | S1 | Pin por SHA das actions e `permissions` no `ci.yml` (também imagens por digest) | Segurança em CI | — | A | sim | Tags de action não redirecionáveis; token do CI com o mínimo |
-| S2 | `dependabot.yml` e `SECURITY.md` | Segurança em CI | S1 | A | não (verificação por comandos) | SHAs e digests mantidos por PRs semanais |
+| S2 | `dependabot.yml` e `SECURITY.md` | Segurança em CI | S1 | A | sim | SHAs e digests mantidos por PRs semanais |
 | S3 | Workflow `security.yml` (zizmor, dependency-review, Trivy) | Segurança em CI | S1 | A | não (verificação por comandos) | Varredura de workflows, dependências e Dockerfile, só avisando |
 | S4 | Regra `S` do `ruff` | Segurança em CI | S1 | A | sim | Lint de segurança Python com ignores justificados |
 | S5 | Settings de segurança e checks required (manual) | Segurança em CI | S2, S3 | U | — | Settings conferidas por `gh api`; checks required após 2 semanas sem achados |
