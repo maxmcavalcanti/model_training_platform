@@ -58,5 +58,19 @@ jobs:
       - run: $COMPOSE run --rm jobs alembic upgrade head
       - name: Check migrations reached head
         run: $COMPOSE run --rm -T jobs alembic current | grep -F '(head)'
+      - run: $COMPOSE build scheduler
+      - name: Check the crontab parses
+        run: $COMPOSE run --rm -T scheduler supercronic -test /app/infra/cron/crontab
+      - name: Check the scheduler runs in America/Sao_Paulo
+        run: test "$($COMPOSE run --rm -T scheduler date +%Z)" = "-03"
+      - name: Check the scheduler has no admin database URL
+        run: |
+          if $COMPOSE run --rm -T scheduler printenv DATABASE_URL_ADMIN; then exit 1; fi
+      - run: $COMPOSE up -d scheduler
+      - name: Check the scheduler stays up
+        run: |
+          sleep 10
+          $COMPOSE ps --status running --services | grep -x scheduler
+          $COMPOSE logs scheduler
       - if: always()
         run: $COMPOSE down -v

@@ -37,6 +37,19 @@ services:
       retries: 5
       start_period: 30s
 
+  scheduler:
+    build:
+      context: ..
+      dockerfile: infra/jobs/Dockerfile
+    command: ["supercronic", "/app/infra/cron/crontab"]
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      DATABASE_URL: postgresql+psycopg://ingestor:${POSTGRES_INGESTOR_PASSWORD:?POSTGRES_INGESTOR_PASSWORD is required}@postgres:5432/ml
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   jobs:
     build:
       context: ..

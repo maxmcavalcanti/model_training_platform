@@ -7,6 +7,7 @@ passing policy test cannot be an artifact of a check that accepts everything.
 from __future__ import annotations
 
 import ipaddress
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -893,3 +894,185 @@ def test_depends_on_check():
     assert depends_on_postgres_problems(started) != []
     assert depends_on_postgres_problems({"depends_on": ["postgres"]}) != []
     assert depends_on_postgres_problems({}) != []
+
+
+# =========================================================================== plan 16
+# Interim ``scheduler`` service (cases 9 to 16): supercronic reading the versioned crontab,
+# ingestor credential only, no port, always restarted.
+
+SCHEDULER_COMMAND = ["supercronic", "/app/infra/cron/crontab"]
+SCHEDULER_TIMEZONE = "America/Sao_Paulo"
+INGESTOR_DATABASE_URL = (
+    "postgresql+psycopg://ingestor:${POSTGRES_INGESTOR_PASSWORD:?required}@postgres:5432/ml"
+)
+
+
+def scheduler_service_problems(service: dict) -> list[str]:
+    """Case 9: long-running service: no profiles, restarts, memory-limited, no ports."""
+    problems = []
+    if service.get("profiles"):
+        problems.append(f"profiles is {service.get('profiles')!r}, expected none")
+    if service.get("restart") != "unless-stopped":
+        problems.append(f"restart is {service.get('restart')!r}, expected 'unless-stopped'")
+    if not service.get("mem_limit"):
+        problems.append("missing mem_limit")
+    if "ports" in service:
+        problems.append("must not declare ports")
+    return problems
+
+
+def scheduler_command_problems(service: dict) -> list[str]:
+    """Case 10: ``command`` is the exec-form list running supercronic on the crontab."""
+    command = service.get("command")
+    if command != SCHEDULER_COMMAND:
+        return [f"command is {command!r}, expected {SCHEDULER_COMMAND!r}"]
+    return []
+
+
+def admin_credential_problems(service: dict) -> list[str]:
+    """Case 13: no admin database URL and no ``ADMIN`` reference anywhere in the service."""
+    problems = []
+    keys = [key for key, _ in environment_items(service.get("environment"))]
+    if "DATABASE_URL_ADMIN" in keys:
+        problems.append("environment defines DATABASE_URL_ADMIN")
+    if "ADMIN" in json.dumps(service, sort_keys=True).upper():
+        problems.append("service references an ADMIN variable")
+    return problems
+
+
+def scheduler_timezone_problems(environment: object) -> list[str]:
+    """Case 14: ``TZ`` is absent (it comes from the image) or exactly America/Sao_Paulo."""
+    values = dict(environment_items(environment))
+    if "TZ" in values and values["TZ"] != SCHEDULER_TIMEZONE:
+        return [f"TZ is {values['TZ']!r}, expected {SCHEDULER_TIMEZONE!r}"]
+    return []
+
+
+@pytest.fixture
+def scheduler_service(main_compose: dict) -> dict:
+    service = services_of(main_compose).get("scheduler")
+    assert service is not None, "infra/docker-compose.yml has no 'scheduler' service"
+    return service
+
+
+# --------------------------------------------------------------------------- plan 16 policy
+
+
+def test_scheduler_is_a_long_running_service_without_ports(scheduler_service):
+    assert scheduler_service_problems(scheduler_service) == []
+
+
+def test_scheduler_runs_supercronic_on_the_versioned_crontab(scheduler_service):
+    assert scheduler_command_problems(scheduler_service) == []
+
+
+def test_scheduler_builds_like_the_jobs_service(scheduler_service):
+    assert jobs_build_problems(scheduler_service) == []
+
+
+def test_scheduler_database_url_uses_the_ingestor_role_with_a_reference(scheduler_service):
+    environment = scheduler_service.get("environment")
+    assert ingestor_url_problems(dict(environment_items(environment)).get("DATABASE_URL")) == []
+    assert database_url_credential_problems(environment) == []
+
+
+def test_scheduler_has_no_admin_credential(scheduler_service):
+    assert admin_credential_problems(scheduler_service) == []
+
+
+def test_scheduler_timezone_is_unset_or_sao_paulo(scheduler_service):
+    assert scheduler_timezone_problems(scheduler_service.get("environment")) == []
+
+
+def test_scheduler_waits_for_a_healthy_postgres(scheduler_service):
+    assert depends_on_postgres_problems(scheduler_service) == []
+
+
+def test_general_rules_still_hold_with_the_scheduler(scheduler_service):
+    # The port allow-list must not grow for the scheduler, and its variables must be declared.
+    assert PORT_PUBLISHING_SERVICES == frozenset({"health", "postgres"})
+    offenders = services_with_forbidden_ports(
+        {"scheduler": scheduler_service}, PORT_PUBLISHING_SERVICES
+    )
+    assert offenders == []
+    compose_text = MAIN_COMPOSE.read_text(encoding="utf-8")
+    env_text = ENV_EXAMPLE.read_text(encoding="utf-8")
+    assert undeclared_variables(compose_text, env_text) == []
+
+
+# --------------------------------------------------------------------------- plan 16 negatives
+
+GOOD_SCHEDULER = {"restart": "unless-stopped", "mem_limit": "512m"}
+
+
+def test_scheduler_service_check_accepts_the_expected_service():
+    assert scheduler_service_problems(GOOD_SCHEDULER) == []
+
+
+@pytest.mark.parametrize(
+    "service",
+    [
+        {**GOOD_SCHEDULER, "profiles": ["jobs"]},
+        {**GOOD_SCHEDULER, "restart": "no"},
+        {**GOOD_SCHEDULER, "restart": False},
+        {k: v for k, v in GOOD_SCHEDULER.items() if k != "restart"},
+        {k: v for k, v in GOOD_SCHEDULER.items() if k != "mem_limit"},
+        {**GOOD_SCHEDULER, "ports": ["127.0.0.1:1:1"]},
+        {},
+    ],
+)
+def test_scheduler_service_check_rejects_deviations(service):
+    assert scheduler_service_problems(service) != []
+
+
+def test_scheduler_command_check_accepts_the_exec_form_list():
+    assert scheduler_command_problems({"command": list(SCHEDULER_COMMAND)}) == []
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "supercronic /app/infra/cron/crontab",
+        ["supercronic", "-test", "/app/infra/cron/crontab"],
+        ["python", "-m", "ingestion", "--help"],
+        None,
+    ],
+)
+def test_scheduler_command_check_rejects_other_commands(command):
+    assert scheduler_command_problems({"command": command}) != []
+
+
+def test_admin_check_accepts_an_ingestor_only_service():
+    service = {"environment": {"DATABASE_URL": INGESTOR_DATABASE_URL}}
+    assert admin_credential_problems(service) == []
+
+
+@pytest.mark.parametrize(
+    "service",
+    [
+        {"environment": {"DATABASE_URL_ADMIN": "postgresql+psycopg://${A:?x}:${B:?x}@postgres/ml"}},
+        {"environment": ["DATABASE_URL_ADMIN=x"]},
+        {
+            "environment": {
+                "DATABASE_URL": "postgresql+psycopg://${POSTGRES_ADMIN_USER}:"
+                "${POSTGRES_ADMIN_PASSWORD}@postgres:5432/ml"
+            }
+        },
+        {"environment": {"X": "${SOME_ADMIN_THING}"}},
+    ],
+)
+def test_admin_check_rejects_admin_urls_and_references(service):
+    assert admin_credential_problems(service) != []
+
+
+@pytest.mark.parametrize(
+    "environment",
+    [None, {}, {"TZ": SCHEDULER_TIMEZONE}, [f"TZ={SCHEDULER_TIMEZONE}"], {"OTHER": "x"}],
+)
+def test_timezone_check_accepts_absent_or_sao_paulo(environment):
+    assert scheduler_timezone_problems(environment) == []
+
+
+@pytest.mark.parametrize("environment", [{"TZ": "UTC"}, ["TZ=UTC"], {"TZ": None}])
+def test_timezone_check_rejects_other_values(environment):
+    assert scheduler_timezone_problems(environment) != []
