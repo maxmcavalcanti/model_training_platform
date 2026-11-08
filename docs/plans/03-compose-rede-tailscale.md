@@ -97,8 +97,8 @@ Os testes leem todos os arquivos `infra/docker-compose*.yml` que existirem.
 1. Dado um compose, todo serviço sem `profiles` tem `restart: unless-stopped`.
 2. Dado um compose, todo serviço (com ou sem `profiles`) tem `mem_limit` definido. Motivo: a VPS tem 1 GB de RAM (decisão de 2026-11-07); um serviço sem limite pode derrubar os outros por falta de memória.
 3. Só serviços da lista permitida podem ter `ports`. Lista neste PR: `health`. (PR 05 acrescenta `postgres` no compose de dev; PR 10, `postgres` no de produção; PRs 29, 30 e 47, `mlflow`, `prefect-server` e `grafana`.)
-4. Toda porta publicada tem IP de host explícito: `127.0.0.1` literal ou uma variável cujo nome termina em `_BIND_IP` (forma `"${X_BIND_IP}:host:container"`, ou `"${X_BIND_IP:-127.0.0.1}:..."` com padrão `127.0.0.1`). Reprovam: porta sem IP (`"8080:8080"`), `0.0.0.0`, `::`, qualquer outro IP literal, e a sintaxe longa com `host_ip` diferente de `127.0.0.1`.
-5. Em `infra/.env.example`, todo `*_BIND_IP` vale `127.0.0.1` ou um endereço da faixa do Tailscale `100.64.0.0/10`. `0.0.0.0` reprova.
+4. Toda porta publicada é só em loopback (ADR 0003): `127.0.0.1` literal ou uma variável cujo nome termina em `_BIND_IP` **com o padrão `127.0.0.1`**, na forma `"${X_BIND_IP:-127.0.0.1}:host:container"`. Reprovam: `"${X_BIND_IP}:..."` sem padrão (variável ausente viraria vazio e o Docker publicaria em `0.0.0.0`), porta sem IP (`"8080:8080"`), `0.0.0.0`, `::`, qualquer outro IP literal (inclusive a faixa do Tailscale), e a sintaxe longa com `host_ip` diferente de `127.0.0.1`.
+5. Em `infra/.env.example`, todo `*_BIND_IP` vale `127.0.0.1`. Qualquer outro valor reprova (`0.0.0.0` e a faixa do Tailscale `100.64.0.0/10` incluídos): a exposição na tailnet é feita por `tailscale serve`, não por bind no IP do Tailscale.
 6. Nenhum valor de `environment` no compose parece segredo literal: chaves que contêm `PASSWORD`, `SENHA`, `TOKEN`, `SECRET` ou `HASH` só podem ter valor na forma `${...}`.
 7. `infra/.env` não está versionado (`git ls-files` não o lista) e `infra/.env.example` existe.
 8. Todo arquivo montado como volume com caminho relativo (`./...`) existe no repo.
