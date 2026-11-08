@@ -23,6 +23,7 @@ ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\s*=")
 REDIRECT_MARKERS = (">", "|")
 MIDNIGHT_HOURS = frozenset({23, 0})
 FORECAST_LINE = "30 6 * * * python -m ingestion weather-forecast"
+ONS_LOAD_LINE = "0 7 * * * python -m ingestion ons-load"
 
 
 # --------------------------------------------------------------------------- check functions
@@ -82,6 +83,20 @@ def forecast_line_problems(lines: list[str]) -> list[str]:
         return [f"expected exactly one weather-forecast line, got {len(matching)}"]
     if " ".join(matching[0].split()) != FORECAST_LINE:
         return [f"{matching[0]!r} is not {FORECAST_LINE!r}"]
+    return []
+
+
+def ons_load_line_problems(lines: list[str]) -> list[str]:
+    """Plan 22, case 35: exactly one ``ons-load`` line, ``0 7 * * *``, no arguments."""
+    matching = [
+        line
+        for line in lines
+        if (m := COMMAND_FORM.match(split_line(line)[1])) and m.group("subcommand") == "ons-load"
+    ]
+    if len(matching) != 1:
+        return [f"expected exactly one ons-load line, got {len(matching)}"]
+    if " ".join(matching[0].split()) != ONS_LOAD_LINE:
+        return [f"{matching[0]!r} is not {ONS_LOAD_LINE!r}"]
     return []
 
 
@@ -157,6 +172,24 @@ def test_every_command_runs_a_known_ingestion_subcommand(lines):
 
 def test_weather_forecast_runs_once_at_0630_without_arguments(lines):
     assert forecast_line_problems(lines) == []
+
+
+# Plan 22, case 35
+def test_ons_load_runs_once_at_0700_without_arguments_and_forecast_is_unchanged(lines):
+    assert ons_load_line_problems(lines) == []
+    assert forecast_line_problems(lines) == []
+
+
+# Plan 22, case 37: the existing rules hold for the new line
+def test_existing_rules_hold_for_the_ons_load_line(lines):
+    ons_lines = [line for line in lines if "ons-load" in line]
+    assert len(ons_lines) == 1
+    line = ons_lines[0]
+    assert field_problems(line) == []
+    assert command_problems(line, set(SUBCOMMANDS)) == []
+    assert fixed_time_problems(line) == []
+    assert midnight_problems(line) == []
+    assert redirect_problems(line) == []
 
 
 def test_every_line_runs_once_a_day_at_a_fixed_time(lines):
@@ -301,3 +334,25 @@ def test_environment_check_accepts_comments_and_schedule_lines():
 )
 def test_environment_check_rejects_variable_definitions(text):
     assert environment_definition_problems(text) != []
+
+
+# Plan 22, case 36
+def test_ons_load_check_accepts_the_expected_line():
+    assert ons_load_line_problems([ONS_LOAD_LINE]) == []
+    assert ons_load_line_problems([FORECAST_LINE, ONS_LOAD_LINE]) == []
+
+
+@pytest.mark.parametrize(
+    "lines_",
+    [
+        [],
+        [FORECAST_LINE],
+        [ONS_LOAD_LINE, ONS_LOAD_LINE],
+        ["5 7 * * * python -m ingestion ons-load"],
+        ["0 8 * * * python -m ingestion ons-load"],
+        ["0 7 * * 1-5 python -m ingestion ons-load"],
+        [ONS_LOAD_LINE + " --days 30"],
+    ],
+)
+def test_ons_load_check_rejects_missing_duplicate_or_deviating_lines(lines_):
+    assert ons_load_line_problems(lines_) != []
