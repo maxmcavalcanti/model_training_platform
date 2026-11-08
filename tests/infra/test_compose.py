@@ -686,3 +686,210 @@ def test_auth_check_accepts_scram_configuration():
 )
 def test_auth_check_rejects_missing_trust_and_md5(environment):
     assert auth_problems(environment) != []
+
+
+# =========================================================================== plan 11
+# One-shot ``jobs`` service (cases 9 to 13). The general restart rule already exempts services
+# with ``profiles`` (ADR 0004) and is intentionally left untouched.
+
+JOBS_DOCKERFILE = INFRA_DIR / "jobs" / "Dockerfile"
+INGESTOR_URL = re.compile(
+    r"^postgresql\+psycopg://ingestor:\$\{POSTGRES_INGESTOR_PASSWORD[^}]*\}@postgres:5432/ml$"
+)
+DATABASE_URL_PARTS = re.compile(
+    r"^[a-z+]+://(?P<user>\$\{[^}]*\}|[^:@/$]+):(?P<password>\$\{[^}]*\}|[^@]*)@"
+)
+
+
+def jobs_service_problems(service: dict) -> list[str]:
+    """Case 9: one-shot service in the ``jobs`` profile, no published ports."""
+    problems = []
+    if service.get("profiles") != ["jobs"]:
+        problems.append(f"profiles is {service.get('profiles')!r}, expected ['jobs']")
+    if service.get("restart") != "no":
+        problems.append(f"restart is {service.get('restart')!r}, expected the string 'no'")
+    if not service.get("mem_limit"):
+        problems.append("missing mem_limit")
+    if "ports" in service:
+        problems.append("must not declare ports")
+    return problems
+
+
+def jobs_build_problems(service: dict) -> list[str]:
+    """Case 10: build from the repository root with ``infra/jobs/Dockerfile``."""
+    build = service.get("build")
+    if not isinstance(build, dict):
+        return ["build is not a mapping"]
+    problems = []
+    if build.get("context") != "..":
+        problems.append(f"context is {build.get('context')!r}")
+    if build.get("dockerfile") != "infra/jobs/Dockerfile":
+        problems.append(f"dockerfile is {build.get('dockerfile')!r}")
+    return problems
+
+
+def ingestor_url_problems(url: object) -> list[str]:
+    """Case 11: ``DATABASE_URL`` connects as ``ingestor`` to host ``postgres``."""
+    if not isinstance(url, str) or not INGESTOR_URL.match(url):
+        return [f"{url!r} is not the ingestor URL"]
+    return []
+
+
+def database_url_credential_problems(environment: object) -> list[str]:
+    """Case 12: user is a reference or ``ingestor``; password is one whole reference."""
+    problems = []
+    for key, value in environment_items(environment):
+        if not key.startswith("DATABASE_URL") or value is None:
+            continue
+        match = DATABASE_URL_PARTS.match(value)
+        if match is None:
+            problems.append(f"{key}: cannot parse credentials")
+            continue
+        user, password = match.group("user"), match.group("password")
+        if user != "ingestor" and not ENV_REFERENCE.match(user):
+            problems.append(f"{key}: literal user {user!r}")
+        if not ENV_REFERENCE.match(password):
+            problems.append(f"{key}: password is not a single reference")
+    return problems
+
+
+def depends_on_postgres_problems(service: dict) -> list[str]:
+    """Case 13: waits for a healthy postgres."""
+    depends_on = service.get("depends_on")
+    condition = None
+    if isinstance(depends_on, dict):
+        condition = (depends_on.get("postgres") or {}).get("condition")
+    if condition != "service_healthy":
+        return [f"depends_on.postgres.condition is {condition!r}"]
+    return []
+
+
+@pytest.fixture
+def jobs_service(main_compose: dict) -> dict:
+    service = services_of(main_compose).get("jobs")
+    assert service is not None, "infra/docker-compose.yml has no 'jobs' service"
+    return service
+
+
+# --------------------------------------------------------------------------- plan 11 policy
+
+
+def test_jobs_is_a_one_shot_profile_service_without_ports(jobs_service):
+    assert jobs_service_problems(jobs_service) == []
+
+
+def test_jobs_builds_from_repo_root_with_the_jobs_dockerfile(jobs_service):
+    assert jobs_build_problems(jobs_service) == []
+    assert JOBS_DOCKERFILE.is_file(), f"{JOBS_DOCKERFILE} does not exist"
+
+
+def test_jobs_database_url_uses_the_ingestor_role(jobs_service):
+    environment = dict(environment_items(jobs_service.get("environment")))
+    assert ingestor_url_problems(environment.get("DATABASE_URL")) == []
+
+
+def test_jobs_database_urls_never_embed_literal_passwords(jobs_service):
+    environment = jobs_service.get("environment")
+    assert "DATABASE_URL" in dict(environment_items(environment))
+    assert database_url_credential_problems(environment) == []
+
+
+def test_jobs_waits_for_a_healthy_postgres(jobs_service):
+    assert depends_on_postgres_problems(jobs_service) == []
+
+
+def test_env_example_declares_every_variable_the_jobs_service_requires(jobs_service):
+    # The file is read in Python at test time only.
+    compose_text = MAIN_COMPOSE.read_text(encoding="utf-8")
+    env_text = ENV_EXAMPLE.read_text(encoding="utf-8")
+    assert "POSTGRES_INGESTOR_PASSWORD" in required_variables(compose_text)
+    assert "POSTGRES_INGESTOR_PASSWORD" in parse_env_file(env_text)
+    assert undeclared_variables(compose_text, env_text) == []
+
+
+# --------------------------------------------------------------------------- plan 11 negatives
+
+GOOD_JOBS = {"profiles": ["jobs"], "restart": "no", "mem_limit": "512m"}
+
+
+def test_jobs_service_check_accepts_the_expected_service():
+    assert jobs_service_problems(GOOD_JOBS) == []
+
+
+@pytest.mark.parametrize(
+    "service",
+    [
+        {**GOOD_JOBS, "restart": False},  # unquoted ``restart: no`` parses as False (YAML 1.1)
+        {**GOOD_JOBS, "restart": "unless-stopped"},
+        {k: v for k, v in GOOD_JOBS.items() if k != "restart"},
+        {**GOOD_JOBS, "profiles": ["other"]},
+        {k: v for k, v in GOOD_JOBS.items() if k != "profiles"},
+        {k: v for k, v in GOOD_JOBS.items() if k != "mem_limit"},
+        {**GOOD_JOBS, "ports": ["127.0.0.1:1:1"]},
+        {},
+    ],
+)
+def test_jobs_service_check_rejects_deviations(service):
+    assert jobs_service_problems(service) != []
+
+
+def test_yaml_unquoted_no_is_false():
+    assert yaml.safe_load("restart: no")["restart"] is False
+    assert yaml.safe_load('restart: "no"')["restart"] == "no"
+
+
+def test_jobs_build_check():
+    good = {"build": {"context": "..", "dockerfile": "infra/jobs/Dockerfile"}}
+    assert jobs_build_problems(good) == []
+    assert jobs_build_problems({"build": {**good["build"], "context": "."}}) != []
+    assert jobs_build_problems({"build": {**good["build"], "dockerfile": "Dockerfile"}}) != []
+    assert jobs_build_problems({"build": ".."}) != []
+    assert jobs_build_problems({}) != []
+
+
+def test_ingestor_url_check_accepts_the_expected_url():
+    url = "postgresql+psycopg://ingestor:${POSTGRES_INGESTOR_PASSWORD:?required}@postgres:5432/ml"
+    assert ingestor_url_problems(url) == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+psycopg://${POSTGRES_ADMIN_USER}:${POSTGRES_INGESTOR_PASSWORD}@postgres:5432/ml",
+        "postgresql+psycopg://ingestor:${POSTGRES_INGESTOR_PASSWORD}@localhost:5432/ml",
+        "postgresql+psycopg://ingestor:hunter2@postgres:5432/ml",
+        None,
+    ],
+)
+def test_ingestor_url_check_rejects_other_users_hosts_and_literals(url):
+    assert ingestor_url_problems(url) != []
+
+
+def test_credential_check_accepts_references_and_ingestor_literal():
+    environment = {
+        "DATABASE_URL": "postgresql+psycopg://ingestor:${A:?x}@postgres:5432/ml",
+        "DATABASE_URL_ADMIN": "postgresql+psycopg://${U:?x}:${P:?x}@postgres:5432/ml",
+        "TZ": "UTC",
+    }
+    assert database_url_credential_problems(environment) == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+psycopg://ingestor:hunter2@postgres:5432/ml",
+        "postgresql+psycopg://admin:${A}x@postgres:5432/ml",
+        "postgresql+psycopg://admin:${A}@postgres:5432/ml",
+    ],
+)
+def test_credential_check_rejects_literal_passwords_and_users(url):
+    assert database_url_credential_problems({"DATABASE_URL": url}) != []
+
+
+def test_depends_on_check():
+    healthy = {"depends_on": {"postgres": {"condition": "service_healthy"}}}
+    started = {"depends_on": {"postgres": {"condition": "service_started"}}}
+    assert depends_on_postgres_problems(healthy) == []
+    assert depends_on_postgres_problems(started) != []
+    assert depends_on_postgres_problems({"depends_on": ["postgres"]}) != []
+    assert depends_on_postgres_problems({}) != []
