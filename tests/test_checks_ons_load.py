@@ -135,3 +135,106 @@ def test_two_problems_are_reported_together_in_a_single_failure():
 
     assert "load_avg_mw" in message
     assert "2026-10-20" in message
+
+
+# ---------------------------------------------------------------------------
+# ONS source-gaps plan (2026-11-08), cases 28 to 35: known whole-day gaps of the source
+# ---------------------------------------------------------------------------
+
+GAP_DAY = dt.date(2015, 4, 9)
+YEAR_2015_START = dt.date(2015, 1, 1)
+YEAR_2015_END = dt.date(2015, 12, 31)
+
+
+def _year_2015_without(*days: dt.date) -> pd.DataFrame:
+    frame = _grid(YEAR_2015_START, YEAR_2015_END)
+    return _drop(frame, frame["date"].isin(days))
+
+
+def _check_2015(frame: pd.DataFrame, **kwargs) -> None:
+    check_ons_daily_load(frame, YEAR_2015_START, YEAR_2015_END, MAX_DELAY_DAYS, **kwargs)
+
+
+def _expect_2015_failure(frame: pd.DataFrame, **kwargs) -> str:
+    with pytest.raises(CheckFailed) as error_info:
+        _check_2015(frame, **kwargs)
+    return str(error_info.value)
+
+
+# Case 28
+def test_known_gaps_constant_lists_the_three_surveyed_days():
+    # Imported here so the missing constant fails only this case, not the whole module.
+    from ingestion.ons import ONS_KNOWN_GAPS
+
+    assert ONS_KNOWN_GAPS == frozenset(
+        {dt.date(2013, 12, 1), dt.date(2014, 2, 1), dt.date(2015, 4, 9)}
+    )
+
+
+# Case 29
+def test_known_gap_day_missing_for_all_subsystems_passes():
+    frame = _year_2015_without(GAP_DAY)
+
+    assert len(frame) == 1456
+    _check_2015(frame)
+
+
+# Case 30
+def test_unknown_gap_next_to_a_known_one_fails_citing_only_the_unknown():
+    message = _expect_2015_failure(_year_2015_without(GAP_DAY, dt.date(2015, 4, 10)))
+
+    assert "2015-04-10" in message
+    assert "2015-04-09" not in message
+
+
+# Case 31
+def test_known_gap_day_with_three_subsystems_fails_and_cites_the_date():
+    frame = _year_2015_without()
+    frame = _drop(frame, (frame["date"] == GAP_DAY) & (frame["subsystem"] == "N"))
+
+    assert "2015-04-09" in _expect_2015_failure(frame)
+
+
+# Case 32
+def test_known_gap_day_present_with_four_subsystems_passes():
+    _check_2015(_year_2015_without())
+
+
+# Case 33
+def test_range_starting_on_the_known_gap_passes():
+    frame = _grid(dt.date(2015, 4, 10), dt.date(2015, 4, 30))
+
+    check_ons_daily_load(frame, GAP_DAY, dt.date(2015, 4, 30), MAX_DELAY_DAYS)
+
+
+# Case 34
+def test_known_gaps_parameter_accepts_a_synthetic_gap():
+    frame = _grid(dt.date(2026, 10, 10), dt.date(2026, 11, 5))
+    frame = _drop(frame, frame["date"] == dt.date(2026, 10, 20))
+
+    check_ons_daily_load(
+        frame, START, END, MAX_DELAY_DAYS, known_gaps=frozenset({dt.date(2026, 10, 20)})
+    )
+
+
+# Case 34 (second half)
+def test_empty_known_gaps_makes_the_2015_gap_fail_again():
+    message = _expect_2015_failure(_year_2015_without(GAP_DAY), known_gaps=frozenset())
+
+    assert "2015-04-09" in message
+
+
+# Case 35
+def test_empty_frame_on_a_known_gap_day_still_fails_with_no_rows():
+    frame = pd.DataFrame(
+        {
+            "subsystem": pd.Series([], dtype="object"),
+            "date": pd.Series([], dtype="object"),
+            "load_avg_mw": pd.Series([], dtype="float64"),
+        }
+    )
+
+    with pytest.raises(CheckFailed) as error_info:
+        check_ons_daily_load(frame, GAP_DAY, GAP_DAY, MAX_DELAY_DAYS)
+
+    assert "no rows" in str(error_info.value)
