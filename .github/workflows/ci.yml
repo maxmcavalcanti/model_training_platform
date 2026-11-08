@@ -36,3 +36,20 @@ jobs:
       - run: uv run pytest
       - run: docker compose -f infra/docker-compose.yml --env-file infra/.env.example config -q
       - run: shellcheck infra/scripts/*.sh
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE: docker compose -f infra/docker-compose.yml --env-file infra/.env.example
+    steps:
+      - uses: actions/checkout@v7
+      - run: $COMPOSE up -d --wait postgres
+      - name: Check every host rule uses scram-sha-256
+        run: |
+          count="$($COMPOSE exec -T postgres psql -U platform_admin -d ml -tAc "select count(*) from pg_hba_file_rules where type like 'host%' and auth_method <> 'scram-sha-256'")"
+          echo "non-scram host rules: $count"
+          test "$count" = 0
+      - name: Check Postgres is not published on 0.0.0.0
+        run: $COMPOSE ps --format '{{.Ports}}' postgres | grep -v '0\.0\.0\.0'
+      - if: always()
+        run: $COMPOSE down -v
