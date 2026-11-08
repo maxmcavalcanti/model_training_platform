@@ -17,6 +17,9 @@ import httpx
 import pandas as pd
 import pytest
 from alembic import command
+from sqlalchemy import text
+
+from ingestion.db import build_engine, upsert
 from ingestion.http import NetworkError
 from ingestion.openmeteo import (
     DAILY_VARIABLES,
@@ -24,9 +27,6 @@ from ingestion.openmeteo import (
     Location,
     fetch_forecast,
 )
-from sqlalchemy import text
-
-from ingestion.db import build_engine, upsert
 from tests.conftest import alembic_config
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "openmeteo_forecast_sao_paulo.json"

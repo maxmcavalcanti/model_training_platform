@@ -11,6 +11,7 @@ from collections.abc import Callable
 
 import httpx
 import pytest
+
 from ingestion.http import NetworkError, fetch_bytes, fetch_json
 
 URL = "https://example.test/data"
