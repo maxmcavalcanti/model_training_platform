@@ -35,6 +35,7 @@ Plataforma de dados e execução de modelos numa VPS (Postgres, MLflow, Prefect,
 - Um teste: `uv run pytest tests/test_smoke.py::<test_name>`
 - Adicionar dependência: `uv add <pacote>` (dev: `uv add --dev <pacote>`). Sempre commitar `uv.lock`.
 - CLI local: `uv run python -m ingestion --help`
+- Snapshot da previsão: `uv run python -m ingestion weather-forecast` (usa `DATABASE_URL`; na VPS: `docker compose -f infra/docker-compose.yml run --rm jobs python -m ingestion weather-forecast`)
 - Imagem dos jobs: `docker build -f infra/jobs/Dockerfile -t platform-jobs .`
 - Na VPS (até o PR 37 a imagem é construída lá, ADR 0004): `docker compose -f infra/docker-compose.yml build jobs` e `docker compose -f infra/docker-compose.yml run --rm jobs <comando>` (ex.: `alembic upgrade head`)
 - Postgres de teste local: `docker compose -f infra/docker-compose.dev.yml up -d`

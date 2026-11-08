@@ -10,6 +10,8 @@ import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 
+import httpx
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,6 +23,30 @@ class Subcommand:
 
 
 SUBCOMMANDS: dict[str, Subcommand] = {}
+
+
+def _add_weather_forecast_arguments(parser: argparse.ArgumentParser) -> None:
+    """The subcommand takes no arguments."""
+
+
+def _run_weather_forecast(args: argparse.Namespace) -> int:
+    from ingestion import jobs
+    from ingestion.db import build_engine
+
+    engine = build_engine()
+    try:
+        with httpx.Client(timeout=30) as client:
+            jobs.ingest_weather_forecast(engine, client, today=jobs.issue_date())
+    finally:
+        engine.dispose()
+    return 0
+
+
+SUBCOMMANDS["weather-forecast"] = Subcommand(
+    help="Snapshot today's weather forecast for every location into raw.weather_forecast",
+    add_arguments=_add_weather_forecast_arguments,
+    run=_run_weather_forecast,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
