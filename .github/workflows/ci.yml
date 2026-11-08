@@ -51,5 +51,12 @@ jobs:
           test "$count" = 0
       - name: Check Postgres is not published on 0.0.0.0
         run: $COMPOSE ps --format '{{.Ports}}' postgres | grep -v '0\.0\.0\.0'
+      - run: $COMPOSE build jobs
+      - run: $COMPOSE run --rm jobs
+      - name: Check the jobs image runs as a non-root user
+        run: test "$($COMPOSE run --rm -T jobs whoami)" = app
+      - run: $COMPOSE run --rm jobs alembic upgrade head
+      - name: Check migrations reached head
+        run: $COMPOSE run --rm -T jobs alembic current | grep -F '(head)'
       - if: always()
         run: $COMPOSE down -v
