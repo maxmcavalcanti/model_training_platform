@@ -1,0 +1,77 @@
+# Keeps the SHA and digest pins from plan S1 up to date (ADR 0006, items 2, 4 and 5).
+# cooldown.semver-*-days is only supported for uv; the other ecosystems take default-days.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directories:
+      - "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Sao_Paulo
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: docker
+    directories:
+      - "/infra/jobs"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Sao_Paulo
+    cooldown:
+      default-days: 7
+    groups:
+      docker:
+        patterns: ["*"]
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: docker-compose
+    directories:
+      - "/infra"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Sao_Paulo
+    cooldown:
+      default-days: 7
+    groups:
+      docker-compose:
+        patterns: ["*"]
+    ignore:
+      # A Postgres major upgrade needs pg_upgrade or dump/restore, never a tag bump
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: uv
+    directories:
+      - "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Sao_Paulo
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    groups:
+      uv:
+        patterns: ["*"]
+    commit-message:
+      prefix: chore
+      include: scope
