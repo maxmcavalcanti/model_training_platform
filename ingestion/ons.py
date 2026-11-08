@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import time
 from collections.abc import Callable
+from datetime import date
 
 import httpx
 import pandas as pd
@@ -21,11 +22,32 @@ COLUMN_MAP = {
     "val_cargaenergiamwmed": "load_avg_mw",
 }
 SUBSYSTEMS = ("SE", "S", "NE", "N")
+# Days with no load for any subsystem in the ONS source itself (survey of 2000-2026 files,
+# 2026-11-08). check_ons_daily_load tolerates them only as whole-day gaps.
+ONS_KNOWN_GAPS = frozenset({date(2013, 12, 1), date(2014, 2, 1), date(2015, 4, 9)})
+_LOAD_COLUMN = "val_cargaenergiamwmed"
+_MAX_REPORTED_VALUES = 5
 
 
 def file_url(year: int) -> str:
     """URL of the yearly daily-load parquet file."""
     return f"{BUCKET_URL}/{LOAD_PREFIX}CARGA_ENERGIA_{year}.parquet"
+
+
+def _normalize_load(series: pd.Series) -> pd.Series:
+    """Return the load as float64; blank text becomes null, other bad text raises."""
+    if pd.api.types.is_numeric_dtype(series):
+        return series.astype("float64")
+    text = series.astype("object").map(
+        lambda value: value.strip() if isinstance(value, str) else value
+    )
+    text = text.map(lambda value: None if value == "" else value)
+    numbers = pd.to_numeric(text, errors="coerce")
+    bad = numbers.isna() & text.notna()
+    if bad.any():
+        values = sorted(set(text[bad]))[:_MAX_REPORTED_VALUES]
+        raise ValueError(f"non-numeric values in {_LOAD_COLUMN}: {values}")
+    return numbers.astype("float64")
 
 
 def parse_load(content: bytes) -> pd.DataFrame:
@@ -48,12 +70,13 @@ def parse_load(content: bytes) -> pd.DataFrame:
     if unknown:
         raise ValueError(f"unknown subsystem codes: {unknown}")
 
+    frame[_LOAD_COLUMN] = _normalize_load(frame[_LOAD_COLUMN])
+    frame = frame.dropna(subset=[_LOAD_COLUMN])
+
     instants = pd.to_datetime(frame["din_instante"])
     if (instants != instants.dt.normalize()).any():
         raise ValueError("din_instante has timestamps that are not at midnight")
     frame["din_instante"] = instants
-
-    frame = frame.dropna(subset=["val_cargaenergiamwmed"])
 
     duplicated = frame.duplicated(subset=["id_subsistema", "din_instante"], keep=False)
     if duplicated.any():

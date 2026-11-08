@@ -8,6 +8,8 @@ import pandas as pd
 import pandera.errors
 import pandera.pandas as pa
 
+from ingestion.ons import ONS_KNOWN_GAPS
+
 
 class CheckFailed(RuntimeError):
     """Raised when a quality check fails; the job execution must fail."""
@@ -105,8 +107,17 @@ ONS_DAILY_LOAD_SCHEMA = pa.DataFrameSchema(
 _ONS_SUBSYSTEM_COUNT = 4
 
 
-def check_ons_daily_load(df: pd.DataFrame, start: date, end: date, max_delay_days: int) -> None:
+def check_ons_daily_load(
+    df: pd.DataFrame,
+    start: date,
+    end: date,
+    max_delay_days: int,
+    *,
+    known_gaps: frozenset[date] = ONS_KNOWN_GAPS,
+) -> None:
     """Check stored ONS daily load: schema, 4 subsystems per day, continuity and freshness.
+
+    Dates in ``known_gaps`` may be absent altogether (whole-day source gaps); a partial day fails.
 
     All problems are reported together in a single :class:`CheckFailed`.
     """
@@ -128,7 +139,7 @@ def check_ons_daily_load(df: pd.DataFrame, start: date, end: date, max_delay_day
         missing = [
             day.isoformat()
             for day in (start + timedelta(days=n) for n in range((last - start).days + 1))
-            if day not in present
+            if day not in present and day not in known_gaps
         ]
         if missing:
             problems.append(f"missing dates: {', '.join(missing)}")
