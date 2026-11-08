@@ -265,3 +265,236 @@ def test_dockerignore_check_accepts_deep_env_patterns(text):
 )
 def test_dockerignore_check_rejects_root_only_or_incomplete_patterns(text):
     assert dockerignore_problems(text) != []
+
+
+# =========================================================================== plan 16
+# Pinned supercronic in the jobs image (cases 17 to 22).
+
+SUPERCRONIC_VERSION_FORMAT = re.compile(r"^v\d+\.\d+\.\d+$")
+SHA256_FORMAT = re.compile(r"^[0-9a-f]{64}$")
+SUPERCRONIC_URL = (
+    "https://github.com/aptible/supercronic/releases/download/"
+    "${SUPERCRONIC_VERSION}/supercronic-linux-amd64"
+)
+SHA256_CHECK = re.compile(r"\bsha256sum\s+-c\b")
+CRON_DIRECTORY = {"infra/cron", "infra/cron/"}
+EXPECTED_TIMEZONE = "America/Sao_Paulo"
+
+
+def arg_values(dockerfile_text: str, name: str) -> list[str | None]:
+    """Default values of every ``ARG <name>`` (``None`` when declared without a default)."""
+    values: list[str | None] = []
+    for keyword, args in instructions(dockerfile_text):
+        if keyword != "ARG":
+            continue
+        arg_name, sep, value = args.partition("=")
+        if arg_name.strip() == name:
+            values.append(value.strip() if sep else None)
+    return values
+
+
+def arg_format_problems(dockerfile_text: str, name: str, pattern: re.Pattern[str]) -> list[str]:
+    values = arg_values(dockerfile_text, name)
+    if len(values) != 1:
+        return [f"expected exactly one ARG {name}, got {len(values)}"]
+    value = values[0]
+    if value is None or not pattern.match(value):
+        return [f"ARG {name} has unacceptable value {value!r}"]
+    return []
+
+
+def supercronic_version_problems(dockerfile_text: str) -> list[str]:
+    """Case 17: ``ARG SUPERCRONIC_VERSION=v<n>.<n>.<n>``."""
+    return arg_format_problems(dockerfile_text, "SUPERCRONIC_VERSION", SUPERCRONIC_VERSION_FORMAT)
+
+
+def supercronic_checksum_problems(dockerfile_text: str) -> list[str]:
+    """Case 18: ``ARG SUPERCRONIC_SHA256`` is 64 lowercase hex characters."""
+    return arg_format_problems(dockerfile_text, "SUPERCRONIC_SHA256", SHA256_FORMAT)
+
+
+def supercronic_download_problems(dockerfile_text: str) -> list[str]:
+    """Case 19: one ``RUN`` downloads the pinned amd64 asset and verifies it with sha256sum."""
+    for keyword, args in instructions(dockerfile_text):
+        if (
+            keyword == "RUN"
+            and SUPERCRONIC_URL in args
+            and SHA256_CHECK.search(args)
+            and "${SUPERCRONIC_SHA256}" in args
+        ):
+            return []
+    return ["no RUN downloads the pinned supercronic and verifies it with sha256sum -c"]
+
+
+def cron_copy_problems(dockerfile_text: str) -> list[str]:
+    """Case 20: ``COPY infra/cron/ infra/cron/`` (relative to ``WORKDIR /app``)."""
+    workdirs = [args for keyword, args in instructions(dockerfile_text) if keyword == "WORKDIR"]
+    if "/app" not in workdirs:
+        return ["no WORKDIR /app"]
+    for keyword, args in instructions(dockerfile_text):
+        if keyword != "COPY":
+            continue
+        tokens = [token for token in args.split() if not token.startswith("--")]
+        if len(tokens) == 2 and tokens[0] in CRON_DIRECTORY and tokens[1] in CRON_DIRECTORY:
+            return []
+    return ["no COPY infra/cron/ infra/cron/"]
+
+
+def timezone_problems(dockerfile_text: str) -> list[str]:
+    """Case 21: the last ``TZ`` set by an ``ENV`` is America/Sao_Paulo."""
+    values = [
+        match.group(1)
+        for keyword, args in instructions(dockerfile_text)
+        if keyword == "ENV"
+        for match in re.finditer(r"(?:^|\s)TZ=(\S+)", args)
+    ]
+    if not values:
+        return ["no ENV TZ"]
+    if values[-1] != EXPECTED_TIMEZONE:
+        return [f"TZ is {values[-1]!r}, expected {EXPECTED_TIMEZONE!r}"]
+    return []
+
+
+# --------------------------------------------------------------------------- plan 16 policy
+
+
+def test_supercronic_version_is_pinned_to_a_release_tag(dockerfile_text):
+    assert supercronic_version_problems(dockerfile_text) == []
+
+
+def test_supercronic_checksum_is_a_sha256(dockerfile_text):
+    assert supercronic_checksum_problems(dockerfile_text) == []
+
+
+def test_supercronic_is_downloaded_from_the_pinned_release_and_verified(dockerfile_text):
+    assert supercronic_download_problems(dockerfile_text) == []
+
+
+def test_crontab_directory_is_copied_into_the_image_without_add(dockerfile_text):
+    assert cron_copy_problems(dockerfile_text) == []
+    assert not [keyword for keyword, _ in instructions(dockerfile_text) if keyword == "ADD"]
+
+
+def test_image_keeps_the_sao_paulo_timezone(dockerfile_text):
+    assert timezone_problems(dockerfile_text) == []
+
+
+def test_existing_rules_hold_with_the_supercronic_args(dockerfile_text):
+    # The new ARGs must exist for this guard to mean anything.
+    assert arg_values(dockerfile_text, "SUPERCRONIC_VERSION") != []
+    assert arg_values(dockerfile_text, "SUPERCRONIC_SHA256") != []
+    assert secret_name_problems(dockerfile_text) == []
+    assert user_problems(dockerfile_text) == []
+    users = [args for keyword, args in instructions(dockerfile_text) if keyword == "USER"]
+    assert users[-1] == "app"
+
+
+# --------------------------------------------------------------------------- plan 16 negatives
+
+GOOD_DOWNLOAD = (
+    "RUN curl -fsSLo /tmp/supercronic \\\n"
+    f'    "{SUPERCRONIC_URL}" \\\n'
+    '    && echo "${SUPERCRONIC_SHA256}  /tmp/supercronic" | sha256sum -c -\n'
+)
+
+
+@pytest.mark.parametrize("value", ["v0.2.33", "v1.10.0"])
+def test_version_check_accepts_release_tags(value):
+    assert supercronic_version_problems(f"ARG SUPERCRONIC_VERSION={value}\n") == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ARG SUPERCRONIC_VERSION\n",
+        "ARG SUPERCRONIC_VERSION=latest\n",
+        "ARG SUPERCRONIC_VERSION=0.2.33\n",
+        "ARG SUPERCRONIC_VERSION=v0.2\n",
+        "ARG SUPERCRONIC_VERSION=\n",
+        "RUN true\n",
+    ],
+)
+def test_version_check_rejects_floating_or_malformed_values(text):
+    assert supercronic_version_problems(text) != []
+
+
+def test_checksum_check_accepts_64_lowercase_hex():
+    assert supercronic_checksum_problems(f"ARG SUPERCRONIC_SHA256={'a1' * 32}\n") == []
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["a" * 40, "a" * 63, "", f"sha256:{'a' * 64}", "A" * 64, "g" * 64],
+)
+def test_checksum_check_rejects_other_values(value):
+    assert supercronic_checksum_problems(f"ARG SUPERCRONIC_SHA256={value}\n") != []
+
+
+def test_checksum_check_rejects_a_missing_arg():
+    assert supercronic_checksum_problems("RUN true\n") != []
+
+
+def test_download_check_accepts_the_pinned_download_with_sha256sum():
+    assert supercronic_download_problems(GOOD_DOWNLOAD) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        GOOD_DOWNLOAD.replace("/download/${SUPERCRONIC_VERSION}/", "/latest/"),
+        GOOD_DOWNLOAD.replace("linux-amd64", "linux-arm64"),
+        GOOD_DOWNLOAD.replace("sha256sum -c -", "true"),
+        GOOD_DOWNLOAD.replace("sha256sum", "sha1sum"),
+        GOOD_DOWNLOAD.replace("${SUPERCRONIC_SHA256}", "deadbeef"),
+        "RUN true\n",
+    ],
+)
+def test_download_check_rejects_unpinned_or_unverified_downloads(text):
+    assert supercronic_download_problems(text) != []
+
+
+def test_download_check_requires_the_verification_in_the_same_run():
+    text = (
+        f'RUN curl -fsSLo /tmp/supercronic "{SUPERCRONIC_URL}"\n'
+        "RUN sha256sum -c ${SUPERCRONIC_SHA256}\n"
+    )
+    assert supercronic_download_problems(text) != []
+
+
+def test_cron_copy_check_accepts_the_crontab_directory():
+    assert cron_copy_problems("WORKDIR /app\nCOPY infra/cron/ infra/cron/\n") == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "WORKDIR /app\nCOPY infra/cron/ /etc/cron/\n",
+        "WORKDIR /app\nCOPY infra/ infra/\n",
+        "WORKDIR /app\nCOPY cron/ infra/cron/\n",
+        "WORKDIR /app\nADD infra/cron/ infra/cron/\n",
+        "COPY infra/cron/ infra/cron/\n",
+        "WORKDIR /app\n",
+    ],
+)
+def test_cron_copy_check_rejects_other_copies(text):
+    assert cron_copy_problems(text) != []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ENV TZ=America/Sao_Paulo\n",
+        "ENV A=1 TZ=America/Sao_Paulo\n",
+        "ENV TZ=UTC\nENV TZ=America/Sao_Paulo\n",
+    ],
+)
+def test_timezone_check_accepts_sao_paulo(text):
+    assert timezone_problems(text) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["ENV TZ=UTC\n", "ENV A=1\n", "RUN true\n", "ENV TZ=America/Sao_Paulo\nENV TZ=UTC\n"],
+)
+def test_timezone_check_rejects_other_or_missing_values(text):
+    assert timezone_problems(text) != []
