@@ -230,3 +230,29 @@ Até o item 17 não há dado que não se recrie: as 4 linhas de `ref.locations` 
 1. **Senhas de `scorer` e `reader` agora?** O pedido é definir as quatro. Nenhum serviço usa `scorer` (score, Fase 4) nem `reader` (Grafana, PR 47) ainda; sem senha, esses papéis não entram por TCP, o que é menos superfície. Recomendação: definir as quatro agora, como pedido, porque o `reader` serve para a sua verificação do notebook e o checklist já fica completo. Se preferir deixar `scorer` sem senha, tire-o do laço do passo 7 e da conferência do `pg_authid` (a linha dele fica `scorer|t|` sem prefixo).
 2. **Convite ou "Share" da máquina?** Com convite, ela é usuária da sua tailnet e a ACL (com `tests`) vale para ela com certeza; pode contar no limite de usuários do seu plano do Tailscale. Com "Share", ela fica na tailnet dela e enxerga só a VPS; a restrição de portas para usuários de nó compartilhado deve ser conferida na documentação atual do Tailscale antes de confiar nela. Recomendação: convite. Diga qual usar.
 3. **`\password` em vez do laço com `read -s`?** O `ALTER ROLE ... PASSWORD '...'` manda a senha em texto ao servidor (que só a registra em log se o comando der erro). O `\password <papel>` do `psql` (interativo: `dc exec postgres psql -U platform_admin -d ml`, depois `\password scientist`) manda já o hash SCRAM. O plano usa `read -s` como pedido; trocar é opcional e não muda as verificações.
+
+## Resultados reais (2026-11-08)
+
+Registro do que foi observado ao executar o item na VPS. Sem IPs, e-mails nem segredos.
+
+1. **Forma real do `tailscale serve status`** (placeholders no lugar dos endereços):
+
+   ```text
+   |-- tcp://<host>.<tailnet>.ts.net:5432 (tailnet only)
+   |-- tcp://<tailscale-ipv4>:5432
+   |-- tcp://[<tailscale-ipv6>]:5432
+   |--> tcp://127.0.0.1:5432
+
+   https://<host>.<tailnet>.ts.net:8080 (tailnet only)
+   |-- / proxy http://127.0.0.1:8080
+   ```
+
+2. **Versão do Tailscale:** 1.104.5.
+3. **Memória:**
+   - `postgres`: 56,75 MiB de 256 MiB (limite).
+   - `health`: 3,91 MiB de 16 MiB.
+   - `free -m`: Mem total 955, usada 392, disponível 563; swap total 2399, usada 0.
+   - `ss`: a 5432 aparece só em 127.0.0.1 e em `tailscale0`.
+4. **Cuidado com a ACL:** as regras para a VPS não podem usar `autogroup:member`, porque usuários convidados herdariam as portas 22 e 8080. Use a identidade do dono; `group:scientists` recebe só a 5432.
+5. **Reboot e expiração de chave:** o teste de reboot passou sem intervenção. A expiração de chave está desativada na VPS.
+6. **Função `dc`:** a função de shell `dc` precisa ser redefinida a cada nova sessão SSH.
