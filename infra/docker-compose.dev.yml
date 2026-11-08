@@ -2,7 +2,7 @@ name: platform-dev
 
 services:
   postgres:
-    image: postgres:16.15
+    image: postgres:16.15@sha256:f9a7b9ebf6f56201f949db745e47bc423c0f0f8294bafe991cc10bf74b029657
     restart: unless-stopped
     mem_limit: 512m
     environment:

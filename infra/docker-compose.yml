@@ -2,7 +2,7 @@ name: platform
 
 services:
   health:
-    image: busybox:1.38.0
+    image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
     command: ["httpd", "-f", "-p", "8080", "-h", "/www"]
     volumes:
       - "./health:/www:ro"
@@ -17,7 +17,7 @@ services:
       retries: 3
 
   postgres:
-    image: postgres:16.15
+    image: postgres:16.15@sha256:f9a7b9ebf6f56201f949db745e47bc423c0f0f8294bafe991cc10bf74b029657
     restart: unless-stopped
     mem_limit: 256m
     environment:
