@@ -32,7 +32,7 @@ Vamos adotar um fluxo de validação de segurança em CI, em camadas e em etapas
 9. **Política de exceções.** Rebaixar um check é permitido só por exceção versionada (`.trivyignore`, `# zizmor: ignore[...]`, `allow-ghsas`) com motivo, link do alerta e data de revisão, ou por `continue-on-error`. Alerta dispensado no GitHub leva o motivo no campo próprio. A branch protection da `main` usa "Do not allow bypassing".
 10. **Dependency graph e `uv.lock`.** Não se afirma que o dependency graph cobre o `uv.lock`. O critério de pronto do PR do `security.yml` inclui conferir o SBOM (`gh api repos/{o}/{r}/dependency-graph/sbom`) e abrir um PR de teste com uma versão vulnerável. Se o grafo não cobrir o `uv.lock`, entra dependency submission ou OSV-Scanner também nos PRs.
 11. **Mudanças em `.github/`** passam pelo `code-reviewer` e pelo `pr-reviewer`, como qualquer PR fora de `docs/**`.
-12. **Ordem de implementação:** depois da Fase 2, em quatro PRs pequenos: (1) pin por SHA e `permissions` no `ci.yml`; (2) `dependabot.yml` (com `SECURITY.md`); (3) `security.yml`; (4) regra `S` do `ruff`.
+12. **Ordem de implementação:** em paralelo à Fase 2, por decisão do usuário em 2026-11-08, em quatro PRs pequenos: (1) pin por SHA e `permissions` no `ci.yml`; (2) `dependabot.yml` (com `SECURITY.md`); (3) `security.yml`; (4) regra `S` do `ruff`.
 
 O CodeQL também analisa `actions` e sobrepõe o `zizmor`; a sobreposição foi aceita.
 
