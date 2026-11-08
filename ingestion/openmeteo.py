@@ -1,4 +1,4 @@
-"""Client for the Open-Meteo daily forecast API."""
+"""Client for the Open-Meteo daily forecast and archive (ERA5 reanalysis) APIs."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import pandas as pd
 from ingestion.http import fetch_json
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 FORECAST_TIMEZONE = "America/Sao_Paulo"
 MAX_HORIZON_DAYS = 7
 
@@ -40,8 +41,8 @@ class Location:
     lon: float
 
 
-def _validate(payload: object, location_id: str, issued_at: date, days: int) -> dict:
-    """Return ``payload["daily"]`` after checking shape, units and first day."""
+def _daily_section(payload: object, location_id: str) -> dict:
+    """Return ``payload["daily"]`` after checking shape, units and list lengths."""
     daily = payload.get("daily") if isinstance(payload, dict) else None
     if not isinstance(daily, dict):
         raise ValueError(f"{location_id}: response has no 'daily' section")
@@ -59,8 +60,16 @@ def _validate(payload: object, location_id: str, issued_at: date, days: int) -> 
     lengths = {name: len(daily[name]) for name in names}
     if len(set(lengths.values())) != 1:
         raise ValueError(f"{location_id}: daily lists have different lengths: {lengths}")
-    if lengths["time"] < days + 1:
-        raise ValueError(f"{location_id}: expected at least {days + 1} days, got {lengths['time']}")
+    return daily
+
+
+def _validate(payload: object, location_id: str, issued_at: date, days: int) -> dict:
+    """Return ``payload["daily"]`` after checking the common shape and the first day."""
+    daily = _daily_section(payload, location_id)
+    if len(daily["time"]) < days + 1:
+        raise ValueError(
+            f"{location_id}: expected at least {days + 1} days, got {len(daily['time'])}"
+        )
     first_day = date.fromisoformat(daily["time"][0])
     if first_day != issued_at:
         raise ValueError(f"{location_id}: first forecast day is {first_day}, expected {issued_at}")
@@ -97,3 +106,50 @@ def fetch_forecast(
     for name, column in DAILY_VARIABLES.items():
         columns[column] = pd.Series(daily[name][1 : days + 1], dtype="float64")
     return pd.DataFrame(columns)
+
+
+def fetch_observed(
+    client: httpx.Client,
+    location: Location,
+    start: date,
+    end: date,
+    *,
+    base_delay: float = 1.0,
+    sleep: Callable[[float], None] = time.sleep,
+) -> pd.DataFrame:
+    """Fetch observed daily weather for ``start..end`` as a frame ready for upsert.
+
+    Days whose five variables are all null (not yet published) are dropped.
+    """
+    if start > end:
+        raise ValueError(f"start {start} is after end {end}")
+    params = {
+        "latitude": location.lat,
+        "longitude": location.lon,
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "daily": ",".join(DAILY_VARIABLES),
+        "timezone": FORECAST_TIMEZONE,
+    }
+    payload = fetch_json(client, ARCHIVE_URL, params, base_delay=base_delay, sleep=sleep)
+    daily = _daily_section(payload, location.location_id)
+
+    expected = [start + timedelta(days=n) for n in range((end - start).days + 1)]
+    received = [date.fromisoformat(day) for day in daily["time"]]
+    for want, got in zip(expected, received, strict=False):
+        if want != got:
+            raise ValueError(f"{location.location_id}: expected day {want}, got {got}")
+    if len(received) != len(expected):
+        raise ValueError(
+            f"{location.location_id}: expected {len(expected)} days "
+            f"from {start} to {end}, got {len(received)}"
+        )
+
+    columns: dict[str, object] = {
+        "location_id": [location.location_id] * len(expected),
+        "date": expected,
+    }
+    for name, column in DAILY_VARIABLES.items():
+        columns[column] = pd.Series(daily[name], dtype="float64")
+    frame = pd.DataFrame(columns)
+    return frame.dropna(how="all", subset=list(DAILY_VARIABLES.values())).reset_index(drop=True)
