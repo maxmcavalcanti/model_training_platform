@@ -1,7 +1,8 @@
 # 41 — Tabela `predictions.model_predictions`
 
-> Executa: agente. Depende de: 25 (próxima revisão Alembic) e da Fase 3 pronta (item 40). Branch sugerida: `feat/predictions-table`.
+> Executa: agente. Depende de: 28 (a revisão anterior passa a ser a `0008_ml_database_connect`) e da Fase 3 pronta (item 40). Branch sugerida: `feat/predictions-table`.
 > TDD: test-writer (vermelho) → implementação (verde) → refatorar.
+> Nota 2026-11-08: número da migração ajustado de `0008` para `0009`, porque o plano 28 usa a `0008` (`0008_ml_database_connect`). Se outra migração entrar antes, use o próximo número livre.
 
 ## 1. Objetivo
 
@@ -20,7 +21,7 @@ Fase 4 — Score e painéis: "Job genérico de score lendo `@champion`" (pré-re
 
 | Caminho | Motivo |
 | --- | --- |
-| `migrations/versions/0008_predictions_model_predictions.py` | Tabela; `downgrade` a remove |
+| `migrations/versions/0009_predictions_model_predictions.py` | Tabela; `downgrade` a remove |
 | `tests/test_predictions_model_predictions.py` | Testes (test-writer) |
 
 Modelo de dados (`docs/plataforma-ml.md`):
@@ -34,7 +35,7 @@ Modelo de dados (`docs/plataforma-ml.md`):
 ## 5. Passos
 
 1. (test-writer) Testes da seção 8 (`@pytest.mark.db`, banco migrado). Confirme falha porque a tabela não existe. Commit `test: add predictions.model_predictions tests`.
-2. (implementer) `uv run alembic revision -m "predictions_model_predictions" --rev-id 0008` (ou o próximo livre).
+2. (implementer) `uv run alembic revision -m "predictions_model_predictions" --rev-id 0009` (ou o próximo livre).
 3. `upgrade`: `predictions.model_predictions (model_name text not null, model_version text not null, key text not null, target_date date not null, predicted_value double precision not null, generated_at timestamptz not null, primary key (model_name, key, target_date, generated_at))` e um índice em (`model_name`, `target_date`) para os painéis e o monitoramento.
 4. `downgrade`: `DROP TABLE predictions.model_predictions`.
 5. Permissões pelos privilégios padrão (PR 07): `scorer` escreve, todos leem.
@@ -45,7 +46,7 @@ Modelo de dados (`docs/plataforma-ml.md`):
 | Comando | Saída esperada |
 | --- | --- |
 | `uv run pytest tests/test_predictions_model_predictions.py tests/test_migrations.py` | Todos passam |
-| `uv run alembic heads` | `0008 (head)` |
+| `uv run alembic heads` | `0009 (head)` |
 | `uv run pytest` | Suíte verde |
 | `gh pr checks` | Verde |
 
