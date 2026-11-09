@@ -2,6 +2,7 @@
 
 > Executa: agente. Depende de: 41 (próxima revisão Alembic) e da Fase 4 pronta (item 50). Branch sugerida: `feat/monitoring-metrics`.
 > TDD: test-writer (vermelho) → implementação (verde) → refatorar.
+> Nota 2026-11-08: número da migração ajustado de `0009` para `0010`, porque o plano 28 usa a `0008` e o 41 passa a usar a `0009`. Se outra migração entrar antes, use o próximo número livre.
 
 ## 1. Objetivo
 
@@ -20,7 +21,7 @@ Fase 5 — Monitoramento e alertas: "Job de monitoramento + `monitoring.model_me
 
 | Caminho | Motivo |
 | --- | --- |
-| `migrations/versions/0009_monitoring_model_metrics.py` | Tabela; `downgrade` a remove |
+| `migrations/versions/0010_monitoring_model_metrics.py` | Tabela; `downgrade` a remove |
 | `tests/test_monitoring_model_metrics.py` | Testes (test-writer) |
 
 Modelo de dados (`docs/plataforma-ml.md`): `monitoring.model_metrics` — `model_name`, `model_version`, `date`, `metric`, `value`; chave (`model_name`, `date`, `metric`); escreve Job de monitoramento (usuário `scorer`); lê Todos.
@@ -30,7 +31,7 @@ Modelo de dados (`docs/plataforma-ml.md`): `monitoring.model_metrics` — `model
 ## 5. Passos
 
 1. (test-writer) Testes da seção 8 (`@pytest.mark.db`, banco migrado). Confirme falha. Commit `test: add monitoring.model_metrics tests`.
-2. (implementer) `uv run alembic revision -m "monitoring_model_metrics" --rev-id 0009` (ou o próximo livre).
+2. (implementer) `uv run alembic revision -m "monitoring_model_metrics" --rev-id 0010` (ou o próximo livre).
 3. `upgrade`: `monitoring.model_metrics (model_name text not null, model_version text not null, date date not null, metric text not null check (metric ~ '^[a-z][a-z0-9_]*$'), value double precision not null, primary key (model_name, date, metric))`.
 4. `downgrade`: `DROP TABLE monitoring.model_metrics`.
 5. Permissões pelos privilégios padrão (PR 07): `scorer` escreve, todos leem.
@@ -41,7 +42,7 @@ Modelo de dados (`docs/plataforma-ml.md`): `monitoring.model_metrics` — `model
 | Comando | Saída esperada |
 | --- | --- |
 | `uv run pytest tests/test_monitoring_model_metrics.py tests/test_migrations.py` | Todos passam |
-| `uv run alembic heads` | `0009 (head)` |
+| `uv run alembic heads` | `0010 (head)` |
 | `uv run pytest` | Suíte verde |
 | `gh pr checks` | Verde |
 
