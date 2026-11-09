@@ -1,20 +1,21 @@
 # 37 — Build, varredura Trivy, attestation e publicação das imagens no GHCR a cada merge na `main`
 
-> Executa: agente. Depende de: 34 e 36 mergeados (imagem sem supercronic, serviço `scheduler` removido), S5 concluído (checks required, ADR 0006, item 8; `docs/plans/S5-settings-seguranca-manual.md`) e **ADR "Pipeline de entrega" mergeado** (seção 10). Branch sugerida: `ci/publish-images`.
+> Executa: agente. Depende de: 34 e 36 mergeados (imagem sem supercronic, serviço `scheduler` removido), S5 concluído **com os checks required ativos** (ADR 0006, item 8, e ADR 0007, item 10: os checks do `security.yml` e do `ci.yml` ficam obrigatórios na branch protection **antes deste PR**, que já publica imagens; `docs/plans/S5-settings-seguranca-manual.md`, seção 5.8) e **ADR 0007 mergeado** (`docs/adr/0007-delivery-pipeline.md`, "Pipeline de entrega"; seção 10). O S6 (`docs/plans/S6-ancora-de-confianca-manual.md`, âncora de confiança) não bloqueia este PR, mas precisa estar concluído antes do merge do PR 39. Branch sugerida: `ci/publish-images`.
 > TDD: test-writer (vermelho) → implementação (verde) → refatorar.
 > Revisado em 2026-11-08 contra a `main` em `05c32c9` (depois de #46 pin por SHA, #48 Dependabot, #49 `security.yml`, #51 hardening, #52 regras de infra), com as correções da revisão independente (aceitas pelo usuário). Substitui o rascunho anterior, que fixava actions "por major" e publicava a tag mutável `main`. Alinhamento entre planos (mesmo dia): o `prefect-worker` usa a mesma referência por digest do `jobs` (plano 34, D5), explícito em todos os pontos que tocam a imagem `platform-jobs`. Revisão final (mesmo dia, aceita pelo usuário): nenhum comando lê o `infra/.env.example` (o `grep` de contagem saiu); a ausência das variáveis é provada pelo `config -q` falhando antes do append, e a presença pelos testes de `tests/infra`.
+> **Alinhado em 2026-11-09 ao ADR 0007** (revisado por segurança; `main` em `7fc1923`): o digest publicado sai da saída do `docker push` e é conferido com `docker buildx imagetools inspect`, nunca de `RepoDigests[0]` (D12, casos 15 e 23); a tag `:<sha>` é mutável e só o digest é implantado (D3); checks required antes deste PR.
 
 ## 1. Objetivo
 
-Criar `.github/workflows/deploy.yml` com um job `publish` que, a cada push na `main`, constrói as imagens próprias, varre cada uma com o Trivy (gate de publicação), publica no GHCR com a tag do commit, gera attestation de proveniência com `actions/attest` e expõe os digests como saída do job.
+Criar `.github/workflows/deploy.yml` com um job `publish` que, a cada push na `main`, constrói as imagens próprias, varre cada uma com o Trivy (gate de publicação), publica no GHCR com a tag do commit, gera attestation de proveniência com `actions/attest` e expõe como saída do job o digest que o próprio push devolveu.
 Fazer o compose de produção referenciar as imagens próprias **por digest**, sem `build:` (`jobs` e `prefect-worker` em `platform-jobs@${JOBS_IMAGE_DIGEST}`, `mlflow` em `platform-mlflow@${MLFLOW_IMAGE_DIGEST}`), para a VPS só fazer `pull` (primeira metade de "merge na `main` chega à VPS"; o SSH é o PR 39).
 
 ## 2. Fora do escopo
 
-- SSH na VPS, `deploy.sh`, Tailscale no CI, environment `production` (PR 39; segredos no item 38). O `harden-runner` no `publish` também entra no PR 39, junto da decisão do ADR.
+- SSH na VPS, `deploy.sh`, verificação de attestation na VPS, Tailscale no CI, environment `production` (PR 39; segredos no item 38). O `harden-runner` no `publish` também entra no PR 39.
 - Tornar os pacotes do GHCR públicos e trocar o fluxo da VPS para `pull` (item 38, usuário).
 - Varredura `trivy image` em PR (só no merge; D6). Mudar os jobs de `security.yml` (os nomes são fixados por `tests/infra/test_security_workflow.py`, `EXPECTED_JOBS`).
-- Tag mutável `main` ou `latest` nas imagens próprias.
+- Tag mutável `main` ou `latest` nas imagens próprias. Implantar por tag (nem `:<sha>`).
 - Multi-arquitetura (a VPS é `x86_64`; só `linux/amd64`).
 - Editar ADR, `.claude/` ou `docs/plans/00-indice.md`.
 - Qualquer item da Fase 4.
@@ -27,7 +28,7 @@ Fase 3 de `docs/plataforma-ml.md` — "Pipelines do GitHub Actions nos dois repo
 
 | Caminho | Quem | Motivo |
 | --- | --- | --- |
-| `tests/infra/test_deploy_workflow.py` (novo) | test-writer | Forma do `deploy.yml` (casos 1 a 16), com exemplos negativos, no estilo de `tests/infra/test_security_workflow.py` |
+| `tests/infra/test_deploy_workflow.py` (novo) | test-writer | Forma do `deploy.yml` (casos 1 a 16 e 23), com exemplos negativos, no estilo de `tests/infra/test_security_workflow.py` |
 | `tests/infra/test_compose.py` | test-writer | Imagens próprias por digest, sem `build:` em produção; `build:` no override (casos 17 a 21); ajustar os testes que hoje leem `build` do `jobs` e do `prefect-worker` no compose de produção |
 | `tests/infra/test_supply_chain_pins.py` | test-writer | `OWN_IMAGE_PREFIXES` passa a aceitar a forma nova, e só com `@${..._IMAGE_DIGEST...}` (caso 22) |
 | `.github/workflows/deploy.yml` (novo) | implementer | Workflow `deploy`, job `publish` |
@@ -38,8 +39,10 @@ Fase 3 de `docs/plataforma-ml.md` — "Pipelines do GitHub Actions nos dois repo
 | `AGENTS.md`, seção "Comandos" | implementer | Build local com o override; trocar o comando de build na VPS pela sequência interina de `pull` (passo 11); registrar `actionlint` |
 | `.github/dependabot.yml` | implementer, **só se** `infra/mlflow` não estiver em `directories` do ecossistema `docker` | Manter o `FROM` do MLflow atualizado (ADR 0006, item 2) |
 
-### Contexto que o implementador precisa (estado da `main` em `05c32c9`)
+### Contexto que o implementador precisa (estado da `main` em `7fc1923`)
 
+- **ADR 0007, item 1** (`docs/adr/0007-delivery-pipeline.md`): "`publish` constrói e publica no GHCR por digest (tag `:<sha>`), com build pela CLI do docker, varredura Trivy bloqueante antes do login e do push, usando a mesma imagem fixada por digest do `security.yml`, e attestation de proveniência com `actions/attest` (permissões mínimas). [...] Todas as actions ficam fixadas por SHA, `permissions: {}` no topo, `persist-credentials: false`, sem `pull_request_target`, sem `workflow_run` e sem `workflow_dispatch`. A tag `:<sha>` é mutável; só o digest é usado para implantar." Item 10: "Os checks do `security.yml` e do `ci.yml` só viram obrigatórios na branch protection depois de duas semanas sem achados HIGH ou CRITICAL, e ficam ativos **antes do PR 37**".
+- O digest que sai deste job é o que o PR 39 passa ao `deploy.sh` e que a VPS verifica com `gh attestation verify oci://ghcr.io/<owner>/platform-<nome>@<digest> --bundle-from-oci --source-digest <sha> ...` antes do `pull`. Por isso o `subject-name` da attestation é exatamente `ghcr.io/<owner em minúsculas>/platform-<nome>` e o `subject-digest` é o mesmo digest da saída.
 - `.github/workflows/ci.yml`: topo `permissions: contents: read`; jobs `lint-and-test` e `compose-smoke`; `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1` com `persist-credentials: false`; `astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3`. O `compose-smoke` tem `env: COMPOSE: docker compose -f infra/docker-compose.yml --env-file infra/.env.example` e passos como `run: $COMPOSE up -d --wait postgres`, `$COMPOSE build jobs`, `$COMPOSE run --rm jobs ...` (a expansão sem aspas é proposital, para separar as palavras, e é o que o shellcheck do actionlint aponta como SC2086). `lint-and-test` roda `docker compose -f infra/docker-compose.yml --env-file infra/.env.example config -q` e `shellcheck infra/scripts/*.sh`. O teste `test_ci_workflow_has_uses_lines_to_check` exige **exatamente 3** linhas `uses:` no `ci.yml`: o `actionlint` entra por `run:` com `docker run`, não por `uses:`.
 - `.github/workflows/security.yml`: `permissions: {}` no topo; `env.TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c`; Trivy roda por `docker run --rm --user "$(id -u):$(id -g)" -v "$GITHUB_WORKSPACE:/src:ro" ... -v "$RUNNER_TEMP/trivy-cache:/cache" -w /src "$TRIVY_IMAGE" fs --cache-dir /cache ...`, nunca por `aquasecurity/trivy-action` nem `setup-trivy`. Com `-w /src`, o Trivy lê o `.trivyignore` da raiz do checkout, se existir.
 - Regras de workflow (`.claude/rules/infra.md`, ADR 0006 itens 4 a 7): "toda action por SHA completo de commit com `# vX.Y.Z` na mesma linha, nunca por tag; `permissions` no topo (`{}` ou `contents: read`) e o mínimo declarado em cada job; `actions/checkout` com `persist-credentials: false`; nenhum gatilho `pull_request_target` nem `workflow_run`; nenhum `${{ }}` dentro de `run:` (o valor entra por `env:`); `if:` em uma linha só; [...] o Trivy roda pela imagem fixada por digest (`TRIVY_IMAGE` do `security.yml`) [...]. Antes de commitar mudança em workflow, rode `uv run zizmor .github/workflows/` e corrija os achados." ADR 0006, item 7: "Nenhum segredo no nível do repositório." Este job não usa `secrets.`: o login no GHCR usa o token do job (`github.token`).
@@ -51,17 +54,18 @@ Fase 3 de `docs/plataforma-ml.md` — "Pipelines do GitHub Actions nos dois repo
 - `tests/infra/test_supply_chain_pins.py`, linha 30: `OWN_IMAGE_PREFIXES = ("ghcr.io/${GHCR_OWNER}/platform-",)` com o comentário "Plan 37 extends this list".
 - `.claude/rules/infra.md`: "`.env.example` com Docker: o agente pode rodar `docker compose -f infra/docker-compose.yml --env-file infra/.env.example config -q` [...]; o agente continua sem abrir, copiar ou imprimir o arquivo, com qualquer ferramenta." Nunca `config` sem `-q`. Nenhum `grep`, `cat` ou outra leitura do `infra/.env.example`: a escrita é só por append (passo 8) e a conferência é pelo `config -q` e pelos testes.
 - `actions/attest` (conferido pela revisão independente; reconfirmar na ref fixada): o README de `actions/attest-build-provenance` recomenda usar `actions/attest`. Inputs usados aqui: `subject-name`, `subject-digest`, `push-to-registry`, `create-storage-record`. Permissões: `id-token: write` e `attestations: write`; `packages: write` para gravar a attestation no registry; `artifact-metadata: write` só se `create-storage-record` ficar ligado (padrão).
+- **Por que não `RepoDigests[0]`** (D12): `docker image inspect --format '{{index .RepoDigests 0}}'` devolve o primeiro digest **local** conhecido para o repositório, que pode ser de um push anterior, de outra tag do mesmo repositório ou, com o image store do containerd, de um objeto diferente do que foi enviado; a ordem da lista não é garantida. O digest certo é o que o registry devolveu para **este** push: a linha `<tag>: digest: sha256:<64> size: <n>` da saída do `docker push`, conferida com `docker buildx imagetools inspect <imagem>:<sha> --format '{{json .Manifest}}'` (campo `.digest`). O `jq` e o `docker buildx` vêm instalados no `ubuntu-latest` (conferir no passo 0).
 
 ### Suposições sobre o estado depois dos PRs 29 a 36 (conferir no passo 1; se alguma falhar, pare e avise)
 
 - S-a. Imagens próprias = uma por `infra/**/Dockerfile`: `infra/jobs/Dockerfile` (contexto `.`) → `platform-jobs`, usada pelos serviços `jobs` e `prefect-worker` (PR 34: mesmo `build` do `jobs`; aqui, mesma referência `platform-jobs@${JOBS_IMAGE_DIGEST}`); `infra/mlflow/Dockerfile` (contexto `infra/mlflow`, PR 29) → `platform-mlflow`, usada pelo serviço `mlflow`.
 - S-b. O `prefect-server` usa a imagem oficial fixada por `tag@sha256:` (PR 30, ADR 0006 item 5), não é imagem própria.
 - S-c. Não existe mais serviço `scheduler` nem supercronic (PR 36). O `scheduler` nunca teve imagem própria: usava o mesmo Dockerfile do `jobs`.
-- S-d. Se houver outro `infra/**/Dockerfile` além desses dois, ele entra como mais uma imagem `platform-<nome>` com o mesmo padrão (mais uma saída de digest, que o PR 39 também passa ao `deploy.sh`); registre no PR.
+- S-d. Se houver outro `infra/**/Dockerfile` além desses dois, ele entra como mais uma imagem `platform-<nome>` com o mesmo padrão (mais uma saída de digest, que o PR 39 também passa ao `deploy.sh` e verifica); registre no PR.
 
 ## 5. Passos
 
-0. (implementer, leitura, antes de tudo) Resolver a imagem do `actionlint` como no plano S1, passo 6 (`docker buildx imagetools inspect rhysd/actionlint:<versão>` → digest do índice; validar `linux/amd64`) e rodá-lo na `main` atual: `docker run --rm -v "$PWD:/repo:ro" --workdir /repo rhysd/actionlint:<versão>@sha256:<digest> -color`. Registrar todos os achados no corpo do PR. Achado esperado: shellcheck SC2086 nos `run: $COMPOSE ...` do `compose-smoke`. Tratamento (recomendado, sem exceção): trocar o `env.COMPOSE` do job por `env.COMPOSE_FILE: infra/docker-compose.yml:infra/docker-compose.build.yml` (variável nativa do Docker Compose; separador `:` no Linux) e escrever cada passo como `docker compose --env-file infra/.env.example <subcomando> ...`, sem variável não citada. Só se isso não funcionar, a alternativa é `-ignore 'SC2086'` restrito no comando do actionlint, com linha `# exception: ...; <url>; review <data>` acima (ADR 0006, item 9). Outros achados: corrigir no código; se algum exigir exceção, mesmo formato.
+0. (implementer, leitura, antes de tudo) Conferir que os checks required do S5 estão ativos: `gh api "repos/<owner>/<repo>/branches/main/protection" --jq '[(.required_status_checks.checks | map(.context) | sort | join(",")), .enforce_admins.enabled]'` → `["compose-smoke,dependency-review,lint-and-test,trivy-config,trivy-fs,zizmor",true]`. Se não, **pare** (ADR 0007, item 10). Resolver a imagem do `actionlint` como no plano S1, passo 6 (`docker buildx imagetools inspect rhysd/actionlint:<versão>` → digest do índice; validar `linux/amd64`) e rodá-lo na `main` atual: `docker run --rm -v "$PWD:/repo:ro" --workdir /repo rhysd/actionlint:<versão>@sha256:<digest> -color`. Registrar todos os achados no corpo do PR. Achado esperado: shellcheck SC2086 nos `run: $COMPOSE ...` do `compose-smoke`. Tratamento (recomendado, sem exceção): trocar o `env.COMPOSE` do job por `env.COMPOSE_FILE: infra/docker-compose.yml:infra/docker-compose.build.yml` (variável nativa do Docker Compose; separador `:` no Linux) e escrever cada passo como `docker compose --env-file infra/.env.example <subcomando> ...`, sem variável não citada. Só se isso não funcionar, a alternativa é `-ignore 'SC2086'` restrito no comando do actionlint, com linha `# exception: ...; <url>; review <data>` acima (ADR 0006, item 9). Outros achados: corrigir no código; se algum exigir exceção, mesmo formato. Conferir na documentação da imagem `ubuntu-latest` atual (`actions/runner-images`, lista de software) que `jq` e o plugin `docker buildx` estão instalados; se não estiverem, pare e avise.
 1. (implementer, leitura) Conferir as suposições S-a a S-d: `git ls-files 'infra/**/Dockerfile'`, `grep -n "scheduler\|supercronic" infra/docker-compose.yml infra/jobs/Dockerfile` (vazio) e os serviços que hoje têm `build:` em `infra/docker-compose.yml` (esperado: `jobs`, `prefect-worker`, `mlflow`). Registrar no PR.
 2. (implementer, leitura) Resolver e validar o SHA de cada action nova, como no plano S1, passo 4 (`docs/plans/S1-pin-sha-e-permissoes-ci.md`): `gh api repos/<owner>/<repo>/git/ref/tags/<tag> --jq '.object.type + " " + .object.sha'` (se `tag`, desreferenciar com `gh api repos/<owner>/<repo>/git/tags/<sha> --jq '.object.sha'`) e `gh api "repos/<owner>/<repo>/compare/<tag>...<sha>" --jq .status` → `identical`. Ler os inputs e permissões **na versão fixada**: `gh api "repos/<owner>/<repo>/contents/action.yml?ref=<sha>" --jq .content | base64 -d` e o README na mesma ref.
    - `actions/checkout`: o mesmo SHA do `ci.yml` (`3d3c42e5...` `# v7.0.1`), exigido pelo teste de consistência.
@@ -150,41 +154,45 @@ Fase 3 de `docs/plataforma-ml.md` — "Pipelines do GitHub Actions nos dois repo
             env:
               IMAGE: ${{ steps.names.outputs.jobs }}
             run: |
-              docker push "$IMAGE:$GITHUB_SHA"
-              ref="$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$GITHUB_SHA")"
-              digest="${ref##*@}"
-              [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-              echo "digest=$digest" >> "$GITHUB_OUTPUT"
-              echo "platform-jobs $digest"
-              echo "platform-jobs $digest" >> "$GITHUB_STEP_SUMMARY"
+              docker push "$IMAGE:$GITHUB_SHA" > "$RUNNER_TEMP/push-jobs.log"
+              cat "$RUNNER_TEMP/push-jobs.log"
+              pushed="$(sed -nE 's/^.*digest: (sha256:[0-9a-f]{64}) size: [0-9]+$/\1/p' "$RUNNER_TEMP/push-jobs.log" | tail -n 1)"
+              [[ "$pushed" =~ ^sha256:[0-9a-f]{64}$ ]]
+              remote="$(docker buildx imagetools inspect "$IMAGE:$GITHUB_SHA" --format '{{json .Manifest}}' | jq -r .digest)"
+              [[ "$remote" == "$pushed" ]]
+              echo "digest=$pushed" >> "$GITHUB_OUTPUT"
+              echo "platform-jobs $pushed"
+              echo "platform-jobs $pushed" >> "$GITHUB_STEP_SUMMARY"
           - uses: actions/attest@<sha> # vX.Y.Z
             with:
               subject-name: ${{ steps.names.outputs.jobs }}
               subject-digest: ${{ steps.push-jobs.outputs.digest }}
               push-to-registry: true
               create-storage-record: false
-          # ... push e attestation de platform-mlflow
+          # ... push e attestation de platform-mlflow (mesma forma, push-mlflow.log)
           - if: always()
             run: docker logout ghcr.io
     ```
 
-    Pontos obrigatórios (os testes travam): topo `permissions: {}`; só gatilho `push` em `[main]`; job `publish` com `if:` de uma linha para `refs/heads/main` e exatamente as permissões acima; nenhum `secrets.`; nenhum `${{` em `run:`; login só por `--password-stdin`; Trivy só por `"$TRIVY_IMAGE"` com `image --input` sobre o `docker save`, checkout montado `:ro` e `-w /src` (para o `.trivyignore`), sem montar `/var/run/docker.sock`; nenhuma tag `latest`/`main`; o digest de cada imagem é impresso no log **e** no summary. O `[[ ... =~ ... ]]` depende do `bash -e` padrão dos passos `run:` do GitHub no `ubuntu-latest`.
+    Pontos obrigatórios (os testes travam): topo `permissions: {}`; só gatilho `push` em `[main]`; job `publish` com `if:` de uma linha para `refs/heads/main` e exatamente as permissões acima; nenhum `secrets.`; nenhum `${{` em `run:`; login só por `--password-stdin`; Trivy só por `"$TRIVY_IMAGE"` com `image --input` sobre o `docker save`, checkout montado `:ro` e `-w /src` (para o `.trivyignore`), sem montar `/var/run/docker.sock`; nenhuma tag `latest`/`main`; **o digest de cada imagem vem da saída do `docker push` dela e é conferido com `docker buildx imagetools inspect` da mesma referência** (nunca `RepoDigests`); o digest é impresso no log **e** no summary. Os `[[ ... ]]` dependem do `bash -e` padrão dos passos `run:` do GitHub no `ubuntu-latest` (sem pipe no `docker push`, porque o padrão não tem `pipefail`). Se o passo 0 mostrar que a saída do `docker push` do runner não traz a linha `digest:` (por exemplo, com o image store do containerd), usar **só** o `docker buildx imagetools inspect` logo depois do push, dentro do mesmo passo (o `concurrency` do workflow impede outro push da mesma tag em paralelo), e registrar no PR; nunca voltar para `RepoDigests`.
 11. (implementer) `AGENTS.md`, "Comandos":
     - "Imagem dos jobs": manter `docker build -f infra/jobs/Dockerfile -t platform-jobs .` e acrescentar o build local pelo override: `docker compose -f infra/docker-compose.yml -f infra/docker-compose.build.yml --env-file infra/.env.example build jobs prefect-worker mlflow`.
-    - Trocar a linha "Na VPS (até o PR 37 a imagem é construída lá, ADR 0004): `docker compose -f infra/docker-compose.yml build jobs prefect-worker` e `... run --rm jobs <comando>`" por: "Na VPS, depois do PR 37 e até o primeiro deploy automático do PR 39 (último fluxo manual, ADR 0004; passo a passo em `docs/plans/38-segredos-ci-cd-manual.md`): `docker compose -f infra/docker-compose.yml --profile jobs pull`, `docker compose -f infra/docker-compose.yml run --rm jobs alembic upgrade head`, `docker compose -f infra/docker-compose.yml up -d --remove-orphans --wait`. Nunca `build` na VPS."
+    - Trocar a linha "Na VPS (até o PR 37 a imagem é construída lá, ADR 0004): `docker compose -f infra/docker-compose.yml build jobs prefect-worker` e `... run --rm jobs <comando>`" por: "Na VPS, depois do PR 37 e até o primeiro deploy automático do PR 39 (último fluxo manual, ADR 0004; passo a passo em `docs/plans/38-segredos-ci-cd-manual.md`): `docker compose -f infra/docker-compose.yml --profile jobs pull`, `docker compose -f infra/docker-compose.yml run --rm jobs alembic upgrade head`, `docker compose -f infra/docker-compose.yml up -d --remove-orphans --wait`. Nunca `build` na VPS; implantar só por digest (a tag `:<sha>` é mutável)."
     - Trocar as linhas de build na VPS do worker (PR 34) e do MLflow (PR 29) pela mesma regra: na VPS, só `pull`.
     - Acrescentar "Validar workflows: `docker run --rm -v "$PWD:/repo:ro" --workdir /repo rhysd/actionlint:<versão>@sha256:<digest> -color`".
     - Não mexer na linha do Dependabot (o PR 39 trata) nem nas do agendador (o 36 já tratou).
 12. (implementer) `.github/dependabot.yml`: se `/infra/mlflow` não estiver em `directories` do ecossistema `docker`, acrescentar (o PR 29 já deveria ter acrescentado, com o `ignore` de minor e major do MLflow, que fica intacto). Validar com `uvx --from check-jsonschema==0.39.0 check-jsonschema --builtin-schema vendor.dependabot .github/dependabot.yml`.
 13. (implementer) `uv run zizmor .github/workflows/` e corrigir achados (nunca `# zizmor: ignore` sem linha de exceção, ADR 0006 item 9). Rodar os critérios de pronto.
-14. Corpo do PR (inglês): achados do actionlint na `main` (passo 0) e o tratamento; a saída do `config -q` do passo 7 (a mensagem de variável ausente, sem valores); tabela `action | tag | sha`; tabela `imagem | tag | digest` do actionlint; as suposições S-a a S-d conferidas; e o aviso ao usuário:
+14. Corpo do PR (inglês): saída da conferência dos checks required (passo 0); achados do actionlint na `main` (passo 0) e o tratamento; a saída do `config -q` do passo 7 (a mensagem de variável ausente, sem valores); tabela `action | tag | sha`; tabela `imagem | tag | digest` do actionlint; as suposições S-a a S-d conferidas; de onde sai o digest (saída do `docker push` + `imagetools inspect`, ou só `imagetools inspect`, conforme o passo 0); e o aviso ao usuário:
     - depois do merge, os pacotes nascem privados e o item 38 os torna públicos; **tornar um pacote do GHCR público é irreversível** (não dá para voltar a privado; só apagar o pacote);
-    - até o item 38, a VPS continua no fluxo manual do ADR 0004, mas **não pode mais fazer `build`** com o compose de produção (sem `build:`); o item 38 troca para `pull`.
+    - até o item 38, a VPS continua no fluxo manual do ADR 0004, mas **não pode mais fazer `build`** com o compose de produção (sem `build:`); o item 38 troca para `pull`;
+    - a tag `:<sha>` é mutável: qualquer conferência ou implantação usa o digest.
 
 ## 6. Critérios de pronto
 
 | Comando | Saída esperada |
 | --- | --- |
+| `gh api "repos/<owner>/<repo>/branches/main/protection" --jq '[(.required_status_checks.checks \| map(.context) \| sort \| join(",")), .enforce_admins.enabled]'` (antes de começar) | `["compose-smoke,dependency-review,lint-and-test,trivy-config,trivy-fs,zizmor",true]` |
 | `uv run pytest tests/infra/` | Todos passam (inclusive `test_every_required_compose_variable_is_declared_in_env_example`, que prova as três variáveis declaradas sem ninguém ler o arquivo) |
 | `uv run pytest` | Suíte verde |
 | `uv run ruff check .` e `uv run ruff format --check .` | Sem achados |
@@ -194,17 +202,19 @@ Fase 3 de `docs/plataforma-ml.md` — "Pipelines do GitHub Actions nos dois repo
 | `docker compose -f infra/docker-compose.yml -f infra/docker-compose.build.yml --env-file infra/.env.example config -q` | Código 0 |
 | `docker compose -f infra/docker-compose.yml -f infra/docker-compose.build.yml --env-file infra/.env.example build jobs prefect-worker` | Termina sem erro |
 | `grep -n "build:" infra/docker-compose.yml` | Nada |
+| `grep -c "RepoDigests" .github/workflows/deploy.yml` | `0` |
 | Para cada action nova: `gh api "repos/<owner>/<repo>/compare/<tag>...<sha>" --jq .status` | `identical` |
-| `gh pr checks` | Verde (`ci`, `security`) |
+| `gh pr checks` | Verde (`ci`, `security`), todos required |
 | Depois do merge: `gh run list --workflow deploy.yml --branch main --limit 1 --json conclusion -q '.[0].conclusion'` | `success` |
 | Depois do merge: `gh run view <id> --log \| grep -E "platform-(jobs\|mlflow) sha256:[0-9a-f]{64}"` | As duas linhas (também no summary) |
-| Depois do merge: `gh attestation verify oci://ghcr.io/<dono>/platform-jobs@<digest> --repo <dono>/<repo>` | Verificação bem-sucedida (o pacote ainda privado só é visível ao dono autenticado) |
+| Depois do merge: `docker buildx imagetools inspect ghcr.io/<dono>/platform-jobs:<sha do merge> --format '{{json .Manifest}}' \| jq -r .digest` (logado como dono enquanto privado) | Igual ao digest `platform-jobs` do log |
+| Depois do merge: `gh attestation verify oci://ghcr.io/<dono>/platform-jobs@<digest> --repo <dono>/<repo> --signer-workflow <dono>/<repo>/.github/workflows/deploy.yml --source-ref refs/heads/main --source-digest <sha do merge> --deny-self-hosted-runners` (e o mesmo para `platform-mlflow`) | Verificação bem-sucedida (o pacote ainda privado só é visível ao dono autenticado); é a mesma verificação que o `deploy.sh` do PR 39 faz antes do `pull` |
 | Depois do merge: `docker buildx imagetools inspect ghcr.io/<dono>/platform-jobs@<digest>` (logado como dono enquanto privado) | Lista `linux/amd64` |
 | Primeiro run do Dependabot depois do merge: aba Insights → Dependency graph → Dependabot, ecossistema `docker-compose` | Sem erro de parse em `infra/docker-compose.yml` (ver riscos) |
 
 ## 7. Testes necessários
 
-`sim`: a forma do workflow (permissões, gatilho, gate do Trivy, ausência de segredo e de tag mutável) e a troca de `build:` por digest no compose são regras de segurança e de deploy verificáveis estaticamente; regressão nelas publicaria imagem sem varredura ou deixaria a VPS construir.
+`sim`: a forma do workflow (permissões, gatilho, gate do Trivy, ausência de segredo e de tag mutável, origem do digest) e a troca de `build:` por digest no compose são regras de segurança e de deploy verificáveis estaticamente; regressão nelas publicaria imagem sem varredura, implantaria um digest diferente do atestado ou deixaria a VPS construir.
 
 ## 8. Casos de teste
 
@@ -224,8 +234,9 @@ Fase 3 de `docs/plataforma-ml.md` — "Pipelines do GitHub Actions nos dois repo
 12. Ordem dentro do `publish`: para cada imagem, a varredura vem antes do `docker push` da mesma imagem; o login vem depois de todas as varreduras. Rejeita push antes do scan.
 13. Login: o único `docker login` do arquivo usa `--password-stdin` e o token entra por `env:` com valor `${{ github.token }}`. Rejeita `-p`/`--password` e valor vindo de `secrets.`.
 14. Tags: todo `docker build -t`/`docker push` usa `:$GITHUB_SHA`; nenhuma ocorrência de `:latest` ou `:main` como tag de imagem. Rejeita `-t "$IMAGE:latest"`.
-15. Saídas do job: `outputs` tem exatamente `jobs-digest` e `mlflow-digest` (um por imagem própria de S-a/S-d), cada uma vindo de `steps.<id>.outputs.digest`; o passo correspondente valida `sha256:[0-9a-f]{64}` antes de escrever em `GITHUB_OUTPUT` e imprime `platform-<nome> <digest>` no stdout e no `GITHUB_STEP_SUMMARY`.
-16. Há um passo `actions/attest@<sha>` por imagem, com `push-to-registry: true`, `create-storage-record: false` (D10) e `subject-digest` vindo da saída do push da mesma imagem. Rejeita `actions/attest-build-provenance` e `push-to-registry` ausente.
+15. Saídas do job: `outputs` tem exatamente `jobs-digest` e `mlflow-digest` (um por imagem própria de S-a/S-d), cada uma vindo de `steps.<id>.outputs.digest`; o passo correspondente obtém o digest **da saída do `docker push` da mesma imagem** (ou, no fallback do passo 10, do `docker buildx imagetools inspect` da mesma referência), valida `sha256:[0-9a-f]{64}` antes de escrever em `GITHUB_OUTPUT` e imprime `platform-<nome> <digest>` no stdout e no `GITHUB_STEP_SUMMARY`. Rejeita um passo que leia o digest de `docker image inspect` e um que escreva em `GITHUB_OUTPUT` sem validar.
+16. Há um passo `actions/attest@<sha>` por imagem, com `push-to-registry: true`, `create-storage-record: false` (D10) e `subject-digest` vindo da saída do push da mesma imagem, e `subject-name` vindo do nome da mesma imagem. Rejeita `actions/attest-build-provenance` e `push-to-registry` ausente.
+23. O texto do `deploy.yml` não contém `RepoDigests`; o passo de push de cada imagem contém `docker buildx imagetools inspect` da mesma referência `"$IMAGE:$GITHUB_SHA"` e compara o resultado com o digest do push (ou, no fallback, usa só ele). Rejeita o exemplo embutido com `{{index .RepoDigests 0}}`.
 
 Compose (`tests/infra/test_compose.py`):
 
@@ -241,7 +252,8 @@ Supply chain (`tests/infra/test_supply_chain_pins.py`):
 
 ## 9. Riscos e perguntas em aberto
 
-- **Não verificado nesta revisão** (o resto foi conferido pela revisão independente; reconfirmar na ref fixada no passo 2): a versão atual do `actionlint` e o conjunto exato de achados na `main` (passo 0 registra); o comportamento de `docker build` no `ubuntu-latest` atual (se o Docker do runner usar o image store do containerd, o push pode gerar um índice com attestation do BuildKit, e o digest de `RepoDigests` será o do índice, o que continua servindo para `pull` por digest; um critério de pronto confere `linux/amd64`); se `COMPOSE_FILE` com dois arquivos se comporta igual aos dois `-f` no `compose-smoke` (o próprio CI do PR confere).
+- **Não verificado nesta revisão** (o resto foi conferido pela revisão independente; reconfirmar na ref fixada no passo 2): a versão atual do `actionlint` e o conjunto exato de achados na `main` (passo 0 registra); o formato da saída do `docker push` no `ubuntu-latest` atual (se o Docker do runner usar o image store do containerd, o push pode gerar um índice com attestation do BuildKit e imprimir o digest do índice, que continua servindo para `pull` por digest e é o mesmo que o `imagetools inspect` devolve; se a linha `digest:` não aparecer, vale o fallback do passo 10); se `COMPOSE_FILE` com dois arquivos se comporta igual aos dois `-f` no `compose-smoke` (o próprio CI do PR confere).
+- **Tag `:<sha>` mutável** (ADR 0007, item 1): quem tem `packages: write` pode reapontar a tag. Por isso só o digest sai do job, só o digest vai para o compose da VPS, e a VPS verifica a attestation do digest com `--source-digest` no PR 39. Conferências manuais também usam o digest.
 - **Dependabot `docker-compose` e `image:` interpolada:** o ecossistema pode não conseguir interpretar `ghcr.io/${GHCR_OWNER:?...}/platform-jobs@${JOBS_IMAGE_DIGEST:?...}` e falhar o parse do arquivo inteiro (deixando de atualizar `postgres`, `busybox` e `prefecthq/prefect`). Checar no primeiro run do Dependabot depois do merge (último critério de pronto). Se falhar: registrar e propor, em PR próprio, `ignore` por `dependency-name` ou mover as imagens próprias para o override de produção.
 - **`TRIVY_IMAGE` duplicado** em `security.yml` e `deploy.yml`: o Dependabot (`github-actions`) só atualiza `uses:`, não strings de `env:`. O caso 9 impede divergência; a atualização continua manual nos dois.
 - **Imagem do MLflow com CVEs HIGH/CRITICAL corrigíveis** na base oficial pode bloquear toda publicação. Saída: exceção versionada em `.trivyignore` (ADR 0006 item 9, testado por `test_trivyignore_entries_follow_the_exception_format`) ou atualizar a base (patch pelo Dependabot; minor e major com o procedimento de upgrade do plano 29). Não usar `--exit-code 0`.
@@ -255,8 +267,8 @@ Supply chain (`tests/infra/test_supply_chain_pins.py`):
 
 - D1. Referência no compose **por digest** (`@${JOBS_IMAGE_DIGEST}` para `jobs` e `prefect-worker`, `@${MLFLOW_IMAGE_DIGEST}` para `mlflow`), sem tag.
 - D2. Build/push pelo **`docker` CLI**, sem `docker/login-action`, `docker/setup-buildx-action`, `docker/build-push-action`, `docker/metadata-action` (quatro actions de terceiros a menos).
-- D3. Tags publicadas: **só `:<sha do commit>`**.
-- D4. Attestation: **GitHub artifact attestation por `actions/attest`** (recomendada pelo README do `attest-build-provenance`), verificável por `gh attestation verify`.
+- D3. Tags publicadas: **só `:<sha do commit>`**, que é **mutável**; nada implanta por tag, só por digest (ADR 0007, item 1).
+- D4. Attestation: **GitHub artifact attestation por `actions/attest`** (recomendada pelo README do `attest-build-provenance`), verificável por `gh attestation verify`, e verificada pela VPS antes do `pull` (PR 39).
 - D5. Gate do Trivy **bloqueante** no `publish`; escape só por exceção versionada.
 - D6. `trivy image` em PR: **não neste PR**.
 - D7. Sem SARIF da varredura da imagem (sem `security-events: write`).
@@ -264,7 +276,8 @@ Supply chain (`tests/infra/test_supply_chain_pins.py`):
 - D9. Compose de produção **sem `build:`** e override `infra/docker-compose.build.yml` para CI e local.
 - D10. **`create-storage-record: false`** em vez de conceder `artifact-metadata: write`. Justificativa: o storage record só alimenta a visão de artefatos ligados do GitHub, que este projeto não usa; desligá-lo tira uma permissão de escrita de um job que já publica. A attestation continua gravada no registry e no repositório (`attestations: write`) e verificável. Fallback: se a versão fixada não tiver o input, conceder `artifact-metadata: write`.
 - D11. SC2086 do `compose-smoke`: **refatorar para `COMPOSE_FILE`** em vez de exceção.
+- D12. **Origem do digest** (alinhamento de 2026-11-09): a linha `digest:` da saída do `docker push`, conferida com `docker buildx imagetools inspect` da mesma referência; fallback só `imagetools inspect`. Nunca `RepoDigests[0]`.
 
 ## 10. Decisões que exigem ADR
 
-**Sim.** O ADR 0006 diz, em "fora de escopo": "Trivy da imagem com attestation, junto da publicação no GHCR (PR 37)" e "exigem ADR próprio quando entrarem". Este PR também cria o primeiro workflow com permissões de escrita (`packages: write`, `id-token: write`, `attestations: write`). Decisão aceita: **um único ADR "Pipeline de entrega: publicação no GHCR e deploy automático"** cobrindo os PRs 37 a 39 (D1 a D11 deste plano; decisões do item 38 e do PR 39, inclusive o `harden-runner` só no `publish` como desvio do ADR 0006, a substituição do ADR 0004 no deploy e o fim da exceção do ADR 0004 no primeiro deploy automático bem-sucedido, com o checkout de bootstrap do plano 39, passo 9), escrito pelo usuário ou pela skill `generate-adr`, em PR próprio, **mergeado antes de começar este PR**. O planner não escreve o ADR.
+**Nenhuma nova.** O ADR exigido pelo ADR 0006 ("Trivy da imagem com attestation, junto da publicação no GHCR (PR 37)" e primeiro workflow com permissões de escrita) foi escrito: `docs/adr/0007-delivery-pipeline.md` ("Pipeline de entrega", 2026-11-09, status Aceito, com revisão de segurança). Ele cobre D1 a D12 deste plano e as decisões do item 38 e do PR 39. **Precisa estar mergeado na `main` antes de começar este PR** (o arquivo existe no checkout principal, ainda não versionado em 2026-11-09). O planner não escreve nem edita ADR.

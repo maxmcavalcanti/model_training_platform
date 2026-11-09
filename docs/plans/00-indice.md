@@ -6,6 +6,8 @@ Revisão v2 (2026-11-07): aplica as decisões P1 a P5 e a P15 do usuário (toolc
 
 Revisão v3 (2026-11-08): alinha o índice aos planos 28 a 40 revisados (recomendações aceitas pelo usuário): migrações `0008` (CONNECT no `ml`), `0009` (previsões) e `0010` (métricas); decisão de memória da Fase 3 (28b de 2 GB como padrão antes do item 31); API do Prefect autenticada desde o PR 30; dois ADRs novos a escrever ("Agendamento e execução pelo Prefect", antes do 33, e "Pipeline de entrega", antes do 37); P13 bloqueia só o 42; estado dos itens de segurança S1 a S4, H1 e R1 (já na `main`). Revisão final (mesmo dia): bootstrap do primeiro deploy automático (plano 39, passo 9) e fim da exceção do ADR 0004 nesse deploy; plano do S5 (`S5-settings-seguranca-manual.md`).
 
+Revisão v4 (2026-11-09): os dois ADRs da v3 foram escritos (ADR 0007 "Pipeline de entrega", com revisão de segurança, e ADR 0008 "Agendamento e execução pelo Prefect"; status Aceito, ainda não mergeados na `main` em `7fc1923`). Planos 37 a 40 alinhados ao ADR 0007: digest pela saída do `docker push` (37); claim `job_workflow_ref`, rotação, revogação e procedimento de emergência (38); verificação de attestation antes do `pull`, `pg_dump` do `ml` antes de migrar, exceções do rollback, `.deploy/history.log` e conferência do SHA no bootstrap (39); checagem de vazamento em run com falha e attestation como controle no deploy (40). Novo item **S6** (âncora de confiança, ADR 0007, item 11), que bloqueia o PR 39.
+
 ## Como usar
 
 - Cada linha **agente** tem uma spec `NN-<slug>.md` com as 10 seções do `task-planner`. Cada linha **usuário** tem um `NN-<slug>-manual.md` com checklist e verificação de pronto.
@@ -23,7 +25,7 @@ Revisão v3 (2026-11-08): alinha o índice aos planos 28 a 40 revisados (recomen
 
 ## Tabela
 
-Legenda: **A** = agente implementa; **U** = usuário executa (VPS, Tailscale, contas, segredos, coordenação). "Antecipado" = item da Fase 2 feito antes do fim da Fase 1 (aprovado pelo usuário em 2026-11-07, P5). Na coluna "Depende de", "ADR Agendamento" e "ADR Pipeline" são os ADRs de "ADRs a escrever", que precisam estar mergeados antes da implementação.
+Legenda: **A** = agente implementa; **U** = usuário executa (VPS, Tailscale, contas, segredos, coordenação). "Antecipado" = item da Fase 2 feito antes do fim da Fase 1 (aprovado pelo usuário em 2026-11-07, P5). Na coluna "Depende de", "ADR 0008" (`docs/adr/0008-prefect-scheduling-and-execution.md`, "Agendamento e execução pelo Prefect") e "ADR 0007" (`docs/adr/0007-delivery-pipeline.md`, "Pipeline de entrega") estão escritos desde 2026-11-09 (status Aceito) e precisam estar **mergeados na `main`** antes da implementação que bloqueiam.
 
 | Id | Título | Fase | Depende de | Quem | Testes | Valor entregue |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -61,14 +63,14 @@ Legenda: **A** = agente implementa; **U** = usuário executa (VPS, Tailscale, co
 | 30 | Prefect server no compose, com API autenticada | 3 | 28, 29 | A | sim | Orquestrador com UI só na tailnet (`mem_limit` 640m); `PREFECT_SERVER_API_AUTH_STRING` a partir de `PREFECT_API_AUTH` do `.env`; `/api/health` e `/api/ready` fora da autenticação; imagem `X.Y.Z-python3.12` + digest |
 | 31 | Subir MLflow e Prefect | 3 | 27 (fechado), 28, 28a, 28b (ou dispensa registrada), 29, 30 | U | — | **Ela registra experimentos no MLflow**; memória medida de novo |
 | 32 | Flows de ingestão | 3 | 15, 22, 26, 30 | A | sim | Ingestões como flows do Prefect; `prefect==X.Y.Z` igual à imagem do server (última estável com 7 dias ou mais; hoje `3.9.1`) |
-| 33 | Deployments do Prefect | 3 | 32, ADR Agendamento | A | sim | Agendas declaradas em código; pool `platform` (`process`, limite 1); deployments `<flow>/production` |
-| 34 | Worker do Prefect | 3 | 30 (API autenticada), 33, ADR Agendamento | A | sim | Execução dos deployments na VPS (`mem_limit` 768m); `PREFECT_API_AUTH_STRING` no worker e no `jobs` |
-| 35 | Cutover supercronic → Prefect | 3 | 27, 28a, 31, 32, 33, 34, ADR Agendamento | U | — | Prefect agendando em produção; memória medida de novo |
+| 33 | Deployments do Prefect | 3 | 32, ADR 0008 | A | sim | Agendas declaradas em código; pool `platform` (`process`, limite 1); deployments `<flow>/production` |
+| 34 | Worker do Prefect | 3 | 30 (API autenticada), 33, ADR 0008 | A | sim | Execução dos deployments na VPS (`mem_limit` 768m); `PREFECT_API_AUTH_STRING` no worker e no `jobs` |
+| 35 | Cutover supercronic → Prefect | 3 | 27, 28a, 31, 32, 33, 34, ADR 0008 | U | — | Prefect agendando em produção; memória medida de novo |
 | 36 | Remover o agendador interino | 3 | 29, 30, 34, 35 | A | sim | Uma fonte de verdade para horários |
-| 37 | Imagens no GHCR (Trivy + attestation) | 3 | 34, 36, S5, ADR Pipeline | A | sim | Build reproduzível a cada merge; `jobs` e `prefect-worker` em `platform-jobs@${JOBS_IMAGE_DIGEST}`, `mlflow` em `platform-mlflow@${MLFLOW_IMAGE_DIGEST}` |
-| 38 | Acessos e segredos do CI/CD | 3 | 37, S5, ADR Pipeline | U | — | CI entra na tailnet por federação OIDC do Tailscale (sem segredo do Tailscale), só na 22 da VPS; chave restrita; pacotes do GHCR públicos, sem token de leitura; último deploy manual completo |
-| 39 | Deploy via SSH | 3 | 37, 38, S5, ADR Pipeline | A | sim | Merge na `main` chega à VPS, depois de um único checkout manual de bootstrap (passo 9: `git fetch` + `git checkout --detach origin/main`, sem `docker`, e "Re-run failed jobs"); troca de versão do MLflow com `pg_dump` + `mlflow db upgrade` (nunca no `command` do serviço; Dependabot só traz patch do MLflow) e `pg_dump` do banco `prefect` antes de trocar a imagem do Prefect |
-| 40 | Prova do deploy e CI do `models` | 3 | 36, 38, 39 (com o bootstrap feito e o primeiro deploy automático com `success`), PR que remove a exceção de deploy manual de `.claude/rules/infra.md` | U | — | **Fase 3 pronta** |
+| 37 | Imagens no GHCR (Trivy + attestation) | 3 | 34, 36, S5 (checks required ativos), ADR 0007 | A | sim | Build reproduzível a cada merge; `jobs` e `prefect-worker` em `platform-jobs@${JOBS_IMAGE_DIGEST}`, `mlflow` em `platform-mlflow@${MLFLOW_IMAGE_DIGEST}`; digest tirado da saída do `docker push` (a tag `:<sha>` é mutável; só o digest é implantado) |
+| 38 | Acessos e segredos do CI/CD | 3 | 37, S5, ADR 0007 | U | — | CI entra na tailnet por federação OIDC do Tailscale (subject do environment **e** claim `job_workflow_ref` do `deploy.yml` na `main`), só na 22 da VPS; chave restrita com rotação anual e revogação documentadas; procedimento de emergência; pacotes do GHCR públicos, sem token de leitura; último deploy manual completo |
+| 39 | Deploy via SSH | 3 | 37, 38, S5, **S6**, ADR 0007 | A | sim | Merge na `main` chega à VPS, depois do verificador instalado (passo 9A) e de um único checkout manual de bootstrap com conferência do SHA (passo 9B); attestation de cada digest verificada antes do `pull`; `pg_dump` do `ml` antes de migrar, do `mlflow` antes do `mlflow db upgrade` e do `prefect` antes de trocar a imagem; rollback com exceções que exigem intervenção manual; trilha `.deploy/history.log` |
+| 40 | Prova do deploy e CI do `models` | 3 | 36, 38, S6, 39 (com o bootstrap feito e o primeiro deploy automático com `success`), PR que remove a exceção de deploy manual de `.claude/rules/infra.md` | U | — | **Fase 3 pronta** |
 | 41 | `predictions.model_predictions` (migração `0009`) | 4 | 25, 28, 40 | A | sim | Tabela única de previsões |
 | 42 | Núcleo do score | 4 | 41 | A | sim | Contrato validado e gravado |
 | 43 | Descobrir champions no MLflow | 4 | 42 | A | sim | Score genérico por alias |
@@ -91,7 +93,7 @@ Legenda: **A** = agente implementa; **U** = usuário executa (VPS, Tailscale, co
 
 ### Segurança em CI (em paralelo à Fase 2) e itens transversais
 
-Fase própria, decidida no ADR 0006 (`docs/adr/0006-security-validation-in-ci.md`). Os ids S1 a S5, H1 e R1 não renumeram os itens acima. Roda em paralelo à Fase 2, sem esperar o item 27 (decisão do usuário em 2026-11-08), e o item S5 precisa estar pronto antes dos PRs 37 e 39 e do item 38. Os planos 37 e 39 usam pin por SHA com comentário `# vX.Y.Z`. Estado em 2026-11-08: S1 a S4, H1 e R1 estão na `main`; falta o S5 (menor data para os checks required: 2026-11-22).
+Fase própria, decidida no ADR 0006 (`docs/adr/0006-security-validation-in-ci.md`). Os ids S1 a S6, H1 e R1 não renumeram os itens acima. Roda em paralelo à Fase 2, sem esperar o item 27 (decisão do usuário em 2026-11-08). O item S5 precisa estar pronto (com os checks required ativos) antes dos PRs 37 e 39 e do item 38 (ADR 0007, item 10); o item S6 precisa estar pronto antes do merge do PR 39 (ADR 0007, item 11). Os planos 37 e 39 usam pin por SHA com comentário `# vX.Y.Z`. Estado em 2026-11-08: S1 a S4, H1 e R1 estão na `main`; falta o S5 (menor data para os checks required: 2026-11-22). Em 2026-11-09: plano do S6 criado (pendente; depende do S5).
 
 | Id | Título | Fase | Depende de | Quem | Testes | Valor entregue |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -100,10 +102,11 @@ Fase própria, decidida no ADR 0006 (`docs/adr/0006-security-validation-in-ci.md
 | S3 | Workflow `security.yml` (zizmor, dependency-review, Trivy) | Segurança em CI | S1 | A | sim | **Na `main`** (#49, `f8cca44`): varredura de workflows, dependências e Dockerfile, só avisando; testes estáticos travam a forma do workflow |
 | S4 | Regra `S` do `ruff` | Segurança em CI | S1 | A | sim | **Na `main`** (#45, `2ffc2c8`): lint de segurança Python com ignores justificados |
 | S5 | Settings de segurança e checks required (`S5-settings-seguranca-manual.md`) | Segurança em CI | S2, S3 | U | — | Settings conferidas uma a uma por `gh api` (secret scanning, push protection, CodeQL, Dependabot alerts e security updates, private vulnerability reporting, aprovação de contribuidores externos, workflow permissions read-only); a partir de 2026-11-22, com zero HIGH/CRITICAL abertos sem exceção, os seis checks (`lint-and-test`, `compose-smoke`, `zizmor`, `dependency-review`, `trivy-config`, `trivy-fs`) required com "Do not allow bypassing" |
+| S6 | Âncora de confiança do deploy (`S6-ancora-de-confianca-manual.md`) | Segurança em CI | S5 | U | — | **Bloqueia o 39.** ADR 0007, item 11: branch protection do S5 conferida e, à escolha do usuário, (b1) credenciais dos agentes sem poder de merge na `main` nem de aprovar deployment (conta separada + ruleset) ou (b2) mantenedor como required reviewer do environment `production`; escolha e verificações registradas no plano |
 | H1 | Endurecimento: follow-ups de revisões anteriores | Transversal | — | A | sim | **Na `main`** (#51, `4090313`): `parse_load` sem carga não finita, `upsert` valida argumentos, dtype do clima, `.dockerignore` |
 | R1 | Regras de workflows e imagens em `.claude/rules/infra.md` | Transversal | S1, S3 | U (ou agente com autorização explícita para `.claude/`) | — | **Na `main`** (#52, `05c32c9`): regras do ADR 0006 carregadas pelos agentes |
 
-Totais da tabela principal: 46 PRs de agente (45 com TDD; o 01 não tem, por ser o bootstrap) e 15 itens do usuário (o 28b é padrão antes do 31 e condicional depois). Fora desses totais: S1 a S5, H1 e R1.
+Totais da tabela principal: 46 PRs de agente (45 com TDD; o 01 não tem, por ser o bootstrap) e 15 itens do usuário (o 28b é padrão antes do 31 e condicional depois). Fora desses totais: S1 a S6, H1 e R1.
 
 ## Grafo de dependências
 
@@ -132,9 +135,9 @@ Fase 3
   27(U, linha de base) ··> 28a(U) ──> 28b(U, padrão; dispensa registrada) ──┐
   07,11 ──> 28 ──┬─> 29 ──> 30 ─────────────────────────────────────────────┴─> 31(U) <── 27 fechado
           28a ───┘
-  15,22,26,30 ──> 32 ──> 33 ──> 34 ──> 35(U) ──> 36 ──> 37 ──> 38(U) ──> 39 ──> bootstrap(U, 39 passo 9) ──> 1º deploy automático
-  ADR Agendamento ──> 33, 34, 35 ;  30 (API autenticada) ──> 34 ;  27,28a,31 ──> 35 ;  29,30 ──> 36
-  S5(U), ADR Pipeline ──> 37, 38, 39
+  15,22,26,30 ──> 32 ──> 33 ──> 34 ──> 35(U) ──> 36 ──> 37 ──> 38(U) ──> 39 ──> bootstrap(U, 39 passo 9B) ──> 1º deploy automático
+  ADR 0008 ──> 33, 34, 35 ;  30 (API autenticada) ──> 34 ;  27,28a,31 ──> 35 ;  29,30 ──> 36
+  S5(U), ADR 0007 ──> 37, 38, 39 ;  S5(U) ──> S6(U) ──> 39 ;  verificador na VPS (U, 39 passo 9A) ──> merge do 39
   1º deploy automático ──> PR de .claude/rules/infra.md + PR de status do ADR 0004 ──> 40(U)
   28b(U, condicional para 4 GB) depois do 31: só se um gatilho disparar no 31, 35, 50 ou 59
 
@@ -149,7 +152,7 @@ Fase 5
   54..58 ──> 59(U)
 ```
 
-Paralelizável: 02 com 01; 18 a qualquer momento antes do 20; 13 com 14; 28 com 28a; as medições do 28a durante a janela D a D+7 do 27 (só leitura); 28b antes ou depois dos PRs 29 e 30 (são só código), sempre antes do 31; as Settings do S5 (5.1 a 5.6) a qualquer momento, e os checks required a partir de 2026-11-22; 57 a partir da Fase 3; 47–49 em paralelo com 42–46.
+Paralelizável: 02 com 01; 18 a qualquer momento antes do 20; 13 com 14; 28 com 28a; as medições do 28a durante a janela D a D+7 do 27 (só leitura); 28b antes ou depois dos PRs 29 e 30 (são só código), sempre antes do 31; as Settings do S5 (5.1 a 5.6) a qualquer momento, e os checks required a partir de 2026-11-22; o S6 a qualquer momento depois do S5 (a opção (b2) só depois do item 38); 57 a partir da Fase 3; 47–49 em paralelo com 42–46.
 
 Caminho crítico até ligar `raw.weather_forecast` (prioridade do doc): 01 → 03 → 05 → 06 → 07 → 08/09 → 10 → 11 → 13/14 → 15 → 16, com 02 → 04 → 12 em paralelo, e então 17. São 13 PRs de agente e 3 itens manuais; nenhum depende do ONS.
 
@@ -163,12 +166,12 @@ Caminho crítico até ligar `raw.weather_forecast` (prioridade do doc): 01 → 0
 | P4 | Rede | **Só Tailscale**. Sem domínio, sem proxy com autenticação, sem certificado público, sem 443 pública. HTTPS e acesso por `tailscale serve` (um hostname `*.ts.net`, uma porta por UI) (ADR 0003). A 22 pública fica aberta só no provisionamento e é fechada quando o SSH pela tailnet funciona | 02, 03, 04, 10, 12, 28, 29, 30, 31, 35, 38, 39, 40, 47, 50, 55, 56 |
 | P5 | Coleta da previsão antes do ONS | **Aprovada**: 13–17 ficam antes do ONS, como planejado | 13, 14, 15, 17 |
 | P15 | Postgres na tailnet | **Loopback + `tailscale serve --tcp=5432`**: `127.0.0.1:5432`, sem sidecar do Tailscale no compose e sem dependência da ordem de boot; o `After=tailscaled.service` deixa de ser necessário (ADR 0003) | 02, 03, 10, 12 |
-| P6 | Deploy manual até a Fase 3 (2026-11-07) | **Aceito** como exceção registrada a "nada de SSH manual para mudar produção" (ADR 0004, `docs/adr/0004-interim-operation-before-prefect.md`). O item 38 é o último deploy manual completo. A exceção **termina no primeiro deploy automático bem-sucedido**, depois do merge do PR 39; entre o item 38 e esse deploy, só é permitido um único checkout manual de bootstrap (plano 39, passo 9: `git fetch` + `git checkout --detach origin/main`, sem `docker`). Daí em diante, o merge na `main` é a única forma de mudar produção | 04, 12, 31, 35, 38, 39, 40 |
+| P6 | Deploy manual até a Fase 3 (2026-11-07) | **Aceito** como exceção registrada a "nada de SSH manual para mudar produção" (ADR 0004, `docs/adr/0004-interim-operation-before-prefect.md`). O item 38 é o último deploy manual completo. A exceção **termina no primeiro deploy automático bem-sucedido**, depois do merge do PR 39 (ADR 0007, item 8); entre o item 38 e esse deploy, só é permitido um único checkout manual de bootstrap (plano 39, passo 9B: `git fetch` + `git checkout --detach origin/main`, sem `docker`, com conferência de que o `HEAD` é o SHA do merge do PR 39 ou de um merge posterior revisado antes do "Re-run"), além da instalação do verificador de attestation (passo 9A), que não muda produção. Daí em diante, o merge na `main` é a única forma de mudar produção, salvo o procedimento de emergência do usuário (ADR 0007, item 12; plano 38) | 04, 12, 31, 35, 38, 39, 40 |
 | P7 | Agendador interino e `restart` em `profiles` (2026-11-07) | **Supercronic no compose**; serviços em `profiles` (execução única) dispensam `restart: unless-stopped` (ADR 0004) | 11, 16 |
 | P8 | `issued_at` e horizontes (2026-11-07) | **`date`, o primeiro snapshot vence, horizontes 1 a 7** (`horizon_days`). Guardar o horizonte 0 segue a avaliar com a cientista (ADR 0005, `docs/adr/0005-data-contract-v1.md`) | 13 |
 | P9 | `ingested_at` no upsert (2026-11-07) | **Última escrita**, sem coluna nova (ADR 0005) | 08 |
 | P18 | Formato de `location_id` (2026-11-07) | **Slug minúsculo** (`sao_paulo`) (ADR 0005) | 09 |
-| P19 | Autenticação da API do Prefect (2026-11-08) | **Ligada desde o PR 30**: `PREFECT_API_AUTH` no `infra/.env` (formato `admin:<senha>`), que vira `PREFECT_SERVER_API_AUTH_STRING` no `prefect-server` e `PREFECT_API_AUTH_STRING` nos clientes (`jobs`, `prefect-worker`, PR 34). `/api/health`, `/api/ready`, `/ui-settings` e a UI ficam fora da autenticação (comportamento do Prefect, confirmado no passo 0 do PR 30). Segunda camada além da ACL; registrada no ADR "Agendamento e execução pelo Prefect" | 28b, 30, 31, 33, 34, 35, 39 |
+| P19 | Autenticação da API do Prefect (2026-11-08) | **Ligada desde o PR 30**: `PREFECT_API_AUTH` no `infra/.env` (formato `admin:<senha>`), que vira `PREFECT_SERVER_API_AUTH_STRING` no `prefect-server` e `PREFECT_API_AUTH_STRING` nos clientes (`jobs`, `prefect-worker`, PR 34). `/api/health`, `/api/ready`, `/ui-settings` e a UI ficam fora da autenticação (comportamento do Prefect, confirmado no passo 0 do PR 30). Segunda camada além da ACL; registrada no ADR 0008 ("Agendamento e execução pelo Prefect", item 2) | 28b, 30, 31, 33, 34, 35, 39 |
 
 ## Pontos de decisão em aberto para o usuário
 
@@ -183,30 +186,31 @@ Decidir antes do PR indicado. Os marcados com ADR precisam do ADR aprovado antes
 | P14 (ADR de contrato) | De onde vem o "real" do monitoramento? | Função `load_actuals(conn, target_date)` no módulo dela | 53 |
 | P16 (ADR) | Backup: destino (B2 ou S3), agendamento (systemd no host ou Prefect), criptografia | B2, systemd, avaliar `rclone crypt` | 57, 59 |
 | P17 | Monitor externo para quando o próprio Prefect cair? Com rede só Tailscale, um monitor de uptime externo não alcança a VPS | Heartbeat de saída: o vigia pinga um serviço tipo healthchecks.io; a falta do ping gera o aviso | 56 |
+| P20 (S6) | Âncora de confiança (ADR 0007, item 11): (b1) credenciais dos agentes sem poder de merge nem de aprovar deployment, ou (b2) mantenedor como required reviewer de `production` | (b1) com conta separada e contexto separado para os agentes; (b2) só se (b1) não for viável, com o risco residual registrado | 39 |
 
-Perguntas menores, registradas na seção 9 de cada spec: gravar dado fora de faixa antes de falhar (15); o Prefect OSS não tem papéis de usuário, então não há "só leitura" para a cientista, e a 4200 só é liberada a ela no item 50 (30, 31); uma credencial ou dois workers para ingestão e score, lembrando o custo de memória (34, 46); montar `/` do host no worker para medir disco (56); checar memória no vigia (56); ligar o recurso "Tailscale SSH" exigiria replanejar 38 e 39 (02, 39); restrição de portas do `tailscale serve` na versão instalada (03).
+Perguntas menores, registradas na seção 9 de cada spec: gravar dado fora de faixa antes de falhar (15); o Prefect OSS não tem papéis de usuário, então não há "só leitura" para a cientista, e a 4200 só é liberada a ela no item 50 (30, 31); uma credencial ou dois workers para ingestão e score, lembrando o custo de memória (34, 46); montar `/` do host no worker para medir disco (56); checar memória no vigia (56); ligar o recurso "Tailscale SSH" exigiria replanejar 38 e 39 (02, 39); restrição de portas do `tailscale serve` na versão instalada (03); `gh` ou `cosign` como verificador e se o `gh` verifica sem login na VPS (39, Q1 e Q2); claim `job_workflow_ref` no painel do Tailscale (38, Q2).
 
 ## ADRs já escritos
 
 - `docs/adr/0001-english-naming-convention.md`: convenção de nomes em inglês. Pendência documental (plano 28, seção 9): o plano 28 usa `ingestion/service_databases.py`, `ensure_service_database(...)` e `tests/test_service_databases.py` no lugar dos nomes da tabela do ADR, e as migrações de previsões e métricas passam a `0009` e `0010`; o usuário acrescenta uma nota ao ADR num PR só de `docs/**` (ou aceita que os planos prevaleçam). Não bloqueia o PR 28.
 - `docs/adr/0002-python-toolchain-and-package-layout.md`: toolchain Python e layout de pacotes (P1).
 - `docs/adr/0003-tailscale-only-network.md`: rede só Tailscale (P4, P15).
-- `docs/adr/0004-interim-operation-before-prefect.md`: operação interina, deploy manual e supercronic (P6, P7). Com ele mergeado, os PRs 11 e 16 deixam de estar bloqueados por esse ADR. A atualização de status (`superseded` no agendador, pelo ADR "Agendamento e execução pelo Prefect", e no deploy, pelo ADR "Pipeline de entrega") vai num **único PR só de `docs/**` logo depois do primeiro deploy automático bem-sucedido do PR 39**, aberto junto do PR que remove a exceção de deploy manual de `.claude/rules/infra.md` (este não é só `docs/**` e passa pelo `code-reviewer` e pelo `pr-reviewer`). Os PRs 36 e 39 não editam o ADR.
+- `docs/adr/0004-interim-operation-before-prefect.md`: operação interina, deploy manual e supercronic (P6, P7). Com ele mergeado, os PRs 11 e 16 deixam de estar bloqueados por esse ADR. A atualização de status (`superseded` no agendador, pelo ADR 0008, e no deploy, pelo ADR 0007) vai num **único PR só de `docs/**` logo depois do primeiro deploy automático bem-sucedido do PR 39**, aberto junto do PR que remove a exceção de deploy manual de `.claude/rules/infra.md` (este não é só `docs/**` e passa pelo `code-reviewer` e pelo `pr-reviewer`). Os PRs 36 e 39 não editam o ADR.
 - `docs/adr/0005-data-contract-v1.md`: contrato de dados v1 de `raw` e `ref` (P8, P9, P18). Com ele mergeado, os PRs 09 e 13 deixam de estar bloqueados por esse ADR.
 - `docs/adr/0006-security-validation-in-ci.md`: validação de segurança no CI (pin por SHA e digest, Dependabot, `security.yml`, regra `S` do ruff, Settings, checks required, segredos só no environment `production`). Base dos itens S1 a S5 e R1; o item manual de Settings previsto no item 1 do ADR é o `docs/plans/S5-settings-seguranca-manual.md`.
+- `docs/adr/0007-delivery-pipeline.md` ("Pipeline de entrega", escrito em 2026-11-09 pela skill `generate-adr`, com revisão de segurança; status Aceito; **ainda não mergeado** na `main` em `7fc1923`): publicação no GHCR por digest com Trivy bloqueante e attestation; compose de produção por digest; federação OIDC do Tailscale com subject e claim `job_workflow_ref`; SSH com chave restrita; `deploy.sh` com validação, trava, fast-forward, janela, verificação de attestation antes do `pull`, `pg_dump` antes de migrar, rollback com exceções e `.deploy/history.log`; segredos só no environment `production`; `harden-runner` só no `publish` (desvio do ADR 0006); fim da exceção do ADR 0004 no primeiro deploy automático, com bootstrap conferido; upgrades de schema; critério de saída do S5 antes do PR 37; âncora de confiança (S6); emergência; rotação e revogação. **Bloqueia 37, 38 e 39** até o merge.
+- `docs/adr/0008-prefect-scheduling-and-execution.md` ("Agendamento e execução pelo Prefect", escrito em 2026-11-09 pela skill `generate-adr`; status Aceito; **ainda não mergeado** na `main` em `7fc1923`): Prefect 3 server só na tailnet, API autenticada (P19), worker e agendas em código, substituição do agendador interino do ADR 0004. **Bloqueia 33, 34 e 35** até o merge.
 
 ## ADRs a escrever (o planner não escreve ADR)
 
-O número de cada ADR é dado quando ele for escrito. Cada um é escrito pelo usuário ou pela skill `generate-adr`, em PR próprio, e precisa estar mergeado antes de a implementação que ele bloqueia começar.
+O número de cada ADR é dado quando ele for escrito. Cada um é escrito pelo usuário ou pela skill `generate-adr`, em PR próprio, e precisa estar mergeado antes de a implementação que ele bloqueia começar. Os antigos itens "Agendamento e execução pelo Prefect" e "Pipeline de entrega" foram escritos como ADR 0008 e ADR 0007 (seção acima).
 
-1. **Agendamento e execução pelo Prefect** — antes do 33 (bloqueia 33, 34 e 35; plano 33, seção 10). Registra: work pool `platform` do tipo `process` com o template padrão, um único worker no compose, limite de 1 execução, código embutido na imagem `jobs`, entrypoint por caminho de módulo (Docker pool e `serve()` rejeitados); agendas em código (`flows/deployments.py`, `America/Sao_Paulo`) como única fonte de verdade dos horários depois do PR 36; registro idempotente por `python -m flows.deployments`; autenticação da API (`PREFECT_SERVER_API_AUTH_STRING` no server, `PREFECT_API_AUTH_STRING` nos clientes, P19); fronteira de credenciais do worker (só `DATABASE_URL` do `ingestor`; o `scorer` é decidido no PR 46); substituição do agendador interino do ADR 0004 (cutover no item 35, remoção no PR 36).
-2. **Pipeline de entrega: publicação no GHCR e deploy automático** — antes do 37 (bloqueia 37, 38 e 39; plano 37, seção 10). Cobre as decisões dos planos 37, 38 e 39: imagens próprias por digest, sem `build:` em produção; varredura `trivy image` como gate de publicação e attestation de proveniência por `actions/attest`; federação OIDC do Tailscale, `tag:ci` só na 22, chave restrita com `command=`, binário do Tailscale com `sha256sum`; `deploy.sh` com janela, trava, fast-forward e rollback de commit e containers (nunca de migração), `pg_dump` antes de trocar a versão do Prefect ou do MLflow e `mlflow db upgrade` fora do `command` do serviço; regra de migrações compatíveis com a versão anterior; o `harden-runner` **só no job `publish`**, registrado como desvio do ADR 0006 (que o previa "quando o deploy por SSH entrar"); e que ele **substitui o ADR 0004 no deploy**, com a exceção do ADR 0004 **terminando no primeiro deploy automático bem-sucedido** depois do merge do PR 39. O item 38 é o último deploy manual completo; entre ele e esse deploy, só é permitido o checkout de bootstrap do plano 39, passo 9 (`git fetch` + `git checkout --detach origin/main`, sem `docker`).
-3. Execução de modelos (P12, P13) — antes do 42; precisa da concordância da cientista.
-4. Fonte do real no monitoramento (P14) — antes do 53; precisa da concordância dela.
-5. Backup (P16) — antes do 57.
+1. Execução de modelos (P12, P13) — antes do 42; precisa da concordância da cientista.
+2. Fonte do real no monitoramento (P14) — antes do 53; precisa da concordância dela.
+3. Backup (P16) — antes do 57.
 
 ## Desvios em relação às instruções do `task-planner`
 
-- Nome dos arquivos: `NN-<slug>.md` (pedido nesta tarefa) em vez de `<AAAA-MM-DD>-<slug>.md`. Os itens 28a e 28b foram inseridos sem renumerar os demais; os itens S1 a S5, H1 e R1 seguem o mesmo desvio (`S<n>-<slug>.md`, `H1-<slug>.md`, `R1-<slug>.md`).
+- Nome dos arquivos: `NN-<slug>.md` (pedido nesta tarefa) em vez de `<AAAA-MM-DD>-<slug>.md`. Os itens 28a e 28b foram inseridos sem renumerar os demais; os itens S1 a S6, H1 e R1 seguem o mesmo desvio (`S<n>-<slug>.md`, `H1-<slug>.md`, `R1-<slug>.md`).
 - "Uma fase por vez": as specs 13–17 são da Fase 2 e vêm antes do fim da Fase 1, pela prioridade do doc. **Aprovado pelo usuário em 2026-11-07 (P5).**
 - As specs referenciam arquivos criados por PRs anteriores (pelo caminho no repo) em vez de colar o código, porque esse código ainda não existe; quando a spec for executada, ele existirá na `main`.
