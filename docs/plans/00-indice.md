@@ -1,5 +1,7 @@
 # Índice dos planos: roadmap das Fases 0 a 5 em PRs atômicos
 
+> **Projeto pausado desde 2026-11-21.** A VPS foi cedida a outro projeto e a coleta está parada. Ver [`docs/pausa-2026-11.md`](../pausa-2026-11.md) (o que foi desligado e como retomar).
+
 Nov 7, 2026. Fonte: `docs/plataforma-ml.md` (roadmap, modelo de dados, jobs, contrato, CI/CD) e `docs/guia-ciencia-de-dados.md` (lado do contrato).
 
 Revisão v2 (2026-11-07): aplica as decisões P1 a P5 e a P15 do usuário (toolchain, repos públicos, VPS de 1 GB, rede só Tailscale, coleta da previsão antes do ONS). Ver "Decisões resolvidas".
