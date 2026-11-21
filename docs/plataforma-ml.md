@@ -2,6 +2,8 @@
 
 Nov 7, 2026 · @Maximiliano
 
+> **Projeto pausado desde 2026-11-21.** A VPS foi cedida a outro projeto e a coleta está parada. Ver `docs/pausa-2026-11.md` (o que foi desligado e como retomar).
+
 ## Visão geral
 
 A plataforma entrega dados diários confiáveis, um registro de modelos e uma esteira que roda os modelos sozinha; a ciência de dados entrega modelos que cumprem um contrato e cuida deles depois. A regra de fronteira: **eu cuido de "o job rodou?", ela cuida de "o modelo está certo?"**.
